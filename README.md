@@ -34,7 +34,7 @@ $ pip install -r requirements.txt
 $ python ascii12.py #le programme se lance
 ```
 
-⚠️⚠️ Si la fenêtre reste noire, regardez le fichier ascii12.py en l'ouvrant, avec un éditeur de texte par exemple le bloc-notes de Windows et changer la ligne 17 (info ligne 58) ⚠️⚠️   
+⚠️⚠️ Si la fenêtre reste noire, regardez le fichier ascii12.py en l'ouvrant, avec un éditeur de texte par exemple le bloc-notes de Windows et changer la ligne 17 `camera = 1` (les valeurs possibles de la variable camera sont 0, 1 ou 2) (plus d'info ligne 58 on y voit la commande avec cv2 d'OpenCV pour capturer la WebCam). En effet, avec Python j'utilise ma bibliothèque OpenCV pour capturer votre WebCam, seulement les Webcam peuvent avoir le numéro 0, 1 ou 2 (par exemple 1 pour moi). Si le numéro de votre webcam n'est pas le bon cela va engendrer une imposibilité au script de fonctionner, du coup il vous faudra changer la valeur pour trouver celle qui corespond à votre matériel. ⚠️⚠️   
 
 Voici un exemple de rendu :
    

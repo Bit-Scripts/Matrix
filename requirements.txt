@@ -1,0 +1,6 @@
+numpy
+opencv-python
+pillow
+numpy
+thread6
+tk

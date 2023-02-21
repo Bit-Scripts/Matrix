@@ -35,7 +35,7 @@ $ python ascii12.py #the program starts
 ```
 
 ⚠️⚠️  
-If the window remains black, look at the file ascii12.py by opening it, with a text editor for example the notepad of Windows and change the line 17 `camera = 1` (the possible values of the variable camera are 0, 1 or 2) (more info line 58 we see there the command with cv2 of OpenCV to capture the WebCam) Indeed, with Python I use the OpenCV library to capture your WebCam, only the Webcam can have the number 0, 1 or 2 (for example 1 for me). If the number of your webcam is not the right one, the script will not work, so you will have to change the value to find the one that matches your hardware.   
+If the window remains black, look at the file ascii12.py by opening it, with a text editor for example the notepad of Windows and change the line 17 `camera = 1` (the possible values of the variable camera are 0, 1 or 2) (more info line 67 we see there the command with cv2 of OpenCV to capture the WebCam) Indeed, with Python I use the OpenCV library to capture your WebCam, only the Webcam can have the number 0, 1 or 2 (for example 1 for me). If the number of your webcam is not the right one, the script will not work, so you will have to change the value to find the one that matches your hardware.   
 ⚠️⚠️     
 
 Here is an example of rendering:

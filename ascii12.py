@@ -4,6 +4,8 @@ import cv2
 import tkinter as tk
 from PIL import Image, ImageTk
 import threading
+import os
+import ctypes
 
 # Définition des caractères à utiliser pour l'ASCII art
 characters = np.asarray(list(' .,:;irsXA253hMHGS#9B&@'))
@@ -15,6 +17,10 @@ running = True
 # Camera 0, 1, ou 2 : 0 par défaut
 global camera
 camera = 1 # à Modifier si ne fonctionne pas
+
+#add id to app to show icon in window and taskbar
+myappid = 'bit-scripts.matrix.cameraascii.twelve' # arbitrary string
+ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 # Variable partagée pour signaler à un thread qu'il doit s'arrêter
 stop = threading.Event()
@@ -41,6 +47,9 @@ def image_to_ascii(image):
 root = tk.Tk()
 root.configure(bg='#000')
 root.geometry("1100x620")
+directory = os.getcwd()
+root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/icon-32.png"))
+root.title("ASCII Camera")
 
 # Création du widget Label pour afficher l'ASCII art
 w = tk.Label(root, text="", font=("Courier New", 8), fg='#0f0', bg='#000')

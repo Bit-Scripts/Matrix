@@ -2,8 +2,10 @@
     
 # MATRIX #
   
-Capture de votre WebCam vers un rendu ASCII Art dans une fenêtre Tkinter, le tout en Python.  
-
+Capture de votre WebCam en temps réel vers un rendu ASCII Art dans une fenêtre Tkinter, le tout en Python.  
+   
+For English version go to [here](./README-ENGLISH.md)
+    
 - - - -  
 ## Installation ##
   

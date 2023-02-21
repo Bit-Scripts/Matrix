@@ -42,7 +42,7 @@ Si la fenêtre reste noire, regardez le fichier ascii12.py en l'ouvrant, avec un
 
 Voici un exemple de rendu :
    
-<img src="https://cdn.discordapp.com/attachments/1077054466181832724/1077296638252568656/image.png" data-canonical-src="https://cdn.discordapp.com/attachments/1077054466181832724/1077296638252568656/image.png" width="512" height="288" />
+<img src="https://cdn.discordapp.com/attachments/1077054466181832724/1077627784656080936/image.png" data-canonical-src="https://cdn.discordapp.com/attachments/1077054466181832724/1077627784656080936/image.png" width="512" height="288" />
 
 - - - -
 ## Pour Contribuer ##

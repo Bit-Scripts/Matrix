@@ -20,8 +20,8 @@ global camera
 camera = 1 # à Modifier si ne fonctionne pas
 
 #add id to app to show icon in window and taskbar
-myappid = 'bit-scripts.matrix.cameraascii.twelve' # arbitrary string
-ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+#myappid = 'bit-scripts.matrix.cameraascii.twelve' # arbitrary string
+#ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 # Variable partagée pour signaler à un thread qu'il doit s'arrêter
 stop = threading.Event()
@@ -44,6 +44,17 @@ def image_to_ascii(image):
         ascii_image += "\n"
     return ascii_image
 
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 # Création de la fenêtre tkinter
 root = tk.Tk()
 root.configure(bg='#000')
@@ -53,7 +64,8 @@ sw = root.winfo_screenwidth()
 sh = root.winfo_screenheight()
 root.geometry("%dx%d+%d+%d" % (1100, 620, (sw-1100)/2, (sh-620)/2))
 directory = os.getcwd()
-root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/icon-32.png"))
+#root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/icon-32.png"))
+root.iconbitmap(resource_path('matrix.ico'))
 root.title("ASCII Camera")
 if getattr(sys, 'frozen', False):
     import pyi_splash

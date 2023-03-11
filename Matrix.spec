@@ -7,8 +7,8 @@ block_cipher = None
 a = Analysis(
     ['ascii12.py'],
     pathex=[],
-    binaries=[],
-    datas=[('.\icon-32.png', '.\icon-32.png')],
+    binaries=[('I:\\ascii\\matrix.ico', '.')],
+    datas=[('I:\\ascii\\matrix.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -52,5 +52,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon-32.png'],
+    icon=['I:\\ascii\\matrix.ico'],
 )

@@ -17,7 +17,7 @@ running = True
 
 # Camera 0, 1, ou 2 : 0 par défaut
 global camera
-camera = 1 # à Modifier si ne fonctionne pas
+camera = 0 # à Modifier si ne fonctionne pas
 
 #add id to app to show icon in window and taskbar
 #myappid = 'bit-scripts.matrix.cameraascii.twelve' # arbitrary string
@@ -64,8 +64,17 @@ sw = root.winfo_screenwidth()
 sh = root.winfo_screenheight()
 root.geometry("%dx%d+%d+%d" % (1100, 620, (sw-1100)/2, (sh-620)/2))
 directory = os.getcwd()
-#root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/icon-32.png"))
-root.iconbitmap(resource_path('matrix.ico'))
+#root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/matrix-linux.png"))
+
+if sys.platform.startswith('win32'):
+    root.iconbitmap(resource_path('matrix.ico'))
+elif sys.platform.startswith('linux'):
+    #root.iconbitmap(resource_path('matrix-linux.png'))
+    root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=resource_path('matrix-linux.png')))
+    pass
+elif sys.platform.startswith('darwin'):
+    root.iconbitmap(resource_path('matrix-mac.icns'))
+
 root.title("ASCII Camera")
 if getattr(sys, 'frozen', False):
     import pyi_splash

@@ -6,6 +6,7 @@ from PIL import Image, ImageTk
 import threading
 import os
 import ctypes
+import platform
 
 # Définition des caractères à utiliser pour l'ASCII art
 characters = np.asarray(list(' .,:;irsXA253hMHGS#9B&@'))
@@ -46,10 +47,20 @@ def image_to_ascii(image):
 # Création de la fenêtre tkinter
 root = tk.Tk()
 root.configure(bg='#000')
-root.geometry("1100x620")
+
+
+sw = root.winfo_screenwidth()
+sh = root.winfo_screenheight()
+root.geometry("%dx%d+%d+%d" % (1100, 620, (sw-1100)/2, (sh-620)/2))
 directory = os.getcwd()
 root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/icon-32.png"))
 root.title("ASCII Camera")
+if getattr(sys, 'frozen', False):
+    import pyi_splash
+
+    # Fermeture du splash screen
+    pyi_splash.update_text('UI Loaded ...')
+    pyi_splash.close()
 
 # Création du widget Label pour afficher l'ASCII art
 w = tk.Label(root, text="", font=("Courier New", 8), fg='#0f0', bg='#000')
@@ -64,7 +75,11 @@ ascii_image = ""
 # Fonction pour mettre à jour l'image capturée
 def capture_frame():
     global frame
-    cap = cv2.VideoCapture(camera) # ⚠️ voir ligne 17 ⚠️
+    if platform.system() == 'Windows':
+        cap = cv2.VideoCapture(camera,cv2.CAP_DSHOW)
+    elif platform.system() == 'Linux':
+        cap = cv2.VideoCapture(camera)
+    #cap = cv2.VideoCapture(camera) # ⚠️ voir ligne 17 ⚠️
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     while running:

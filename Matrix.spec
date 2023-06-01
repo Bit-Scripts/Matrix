@@ -5,10 +5,10 @@ block_cipher = None
 
 
 a = Analysis(
-    ['ascii12.py'],
+    ['ascii13.py'],
     pathex=[],
-    binaries=[('I:\\ascii\\matrix.ico', '.')],
-    datas=[('I:\\ascii\\matrix.ico', '.')],
+    binaries=[('I:\\Matrix\\matrix.ico', '.'),('I:\\Matrix\\MatrixLogo.png', '.')],
+    datas=[('I:\\Matrix\\matrix.ico', '.'),('I:\\Matrix\\MatrixLogo.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -52,5 +52,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['I:\\ascii\\matrix.ico'],
+    icon=['I:\\Matrix\\matrix.ico'],
 )

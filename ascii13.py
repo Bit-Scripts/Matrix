@@ -5,12 +5,12 @@ import tkinter as tk
 from PIL import Image, ImageFont, ImageDraw
 import threading
 import os
-import ctypes
 import platform
 import random
 import time
 import pyvirtualcam
 from io import BytesIO
+import queue
 
 # Définition des caractères à utiliser pour l'ASCII art
 characters = np.asarray(list(' .,:;irsXA253hMHGS#9B&@'))
@@ -18,16 +18,19 @@ characters_str = ' .,:;irsXA253hMHGS#9B&@'  # Caractères ASCII, du plus foncé 
 #characters_str = ' .:-=+*#%@'
 
 # Boolean pour tout arrêter
-global running
 running = True
 
 # Camera 0, 1, ou 2 : 0 par défaut
-global camera
 camera = 0 # à Modifier si ne fonctionne pas
 
+# Chemin des ressources
+if getattr(sys, 'frozen', False):
+    wd = sys._MEIPASS
+else:
+    wd = '' 
+
 # Logo et sa modification de sa taile
-global logo
-logo = cv2.imread('MatrixLogo.png')
+logo = cv2.imread(os.path.join(wd,'.','MatrixLogo.png'))
 size1 = 1280
 size2 = 301
 logo = cv2.resize(logo, (size1, size2))
@@ -42,6 +45,8 @@ rain_ascii_image = ""
 
 rain_ascii_image_cut_line = ""
 ascii_image_result = ""  
+
+columns_to_erase_queue = queue.Queue()
 
 #add id to app to show icon in window and taskbar
 #myappid = 'bit-scripts.matrix.cameraascii.twelve' # arbitrary string
@@ -121,20 +126,72 @@ def simulate_rain(resized_image, drop_positions):
         # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
         a_image = image_to_ascii(resized_image)
         with ascii_image_lock:
+            rain_ascii_image = a_image
+        if not running:
+            break
+        
+def create_rain_drops(resized_image, drop_positions):
+    global running, last_ascii_image, rain_ascii_image
+    drop_columns = []  # Liste des colonnes pour les gouttes de pluie
+
+    while running:
+        # Générer une nouvelle goutte de pluie
+        if len(drop_columns) < 50:
+            column = random.randint(0, resized_image.shape[1] - 1)  # Choix aléatoire de la colonne
+            drop_columns.append(column)
+            drop_positions[column] = 0  # Initialiser la position de la goutte à la ligne supérieure
+
+        # Mettre à jour les positions des gouttes de pluie
+        for column in drop_columns:
+            row = drop_positions[column]
+            
+            # Réinitialiser la colonne à zéro pour effacer la goutte précédente
+            if row >= resized_image.shape[0] - 1:
+                drop_columns.remove(column)
+                columns_to_erase_queue.put((column, row)) # Ajouter la colonne à effacer à la liste
+            else:
+                row += 1  # Descendre la goutte d'une ligne
+                drop_positions[column] = row  # Mettre à jour la position de la goutte
+
+                # Mettre à jour l'image avec la goutte de pluie
+                resized_image[row][column] = 255  # Intensité maximale
+                    # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
+        a_image = image_to_ascii(resized_image)
+        with ascii_image_lock:
             global ascii_image
             rain_ascii_image = a_image
         if not running:
             break
 
-def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+def erase_rain_columns(resized_image, drop_positions, columns_to_erase_queue):
+    global running, last_ascii_image, rain_ascii_image
+    
+    while running:
+        # Effacer progressivement les colonnes
+        if not columns_to_erase_queue.empty():
+            columns_to_erase = []
+            while not columns_to_erase_queue.empty():
+                column, row = columns_to_erase_queue.get()
+                columns_to_erase.append((column, row))
 
-    return os.path.join(base_path, relative_path)
+            for column, row in columns_to_erase:
+                for r in range(row, -1, -1):
+                    intensity = (resized_image[r][column] * 0.8).astype(np.uint8)  # Diminuer de 20%
+                    resized_image[r][column] = intensity
+                
+                # Ajouter la colonne à la liste d'effacement si elle n'est pas encore entièrement effacée
+                if row > 0:
+                    columns_to_erase_queue.put((column, row - 1))
+                
+        # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
+        a_image = image_to_ascii(resized_image)
+        with ascii_image_lock:
+            global ascii_image
+            rain_ascii_image = a_image
+        
+        if not running:
+            break
+
 
 # Création de la fenêtre tkinter
 root = tk.Tk()
@@ -148,13 +205,13 @@ directory = os.getcwd()
 #root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/matrix-linux.png"))
 
 if sys.platform.startswith('win32'):
-    root.iconbitmap(resource_path('matrix.ico'))
+    root.iconbitmap(os.path.join(wd,'.','matrix.ico'))
 elif sys.platform.startswith('linux'):
-    #root.iconbitmap(resource_path('matrix-linux.png'))
-    root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=resource_path('matrix-linux.png')))
+    #root.iconbitmap(os.path.join(wd,'.','matrix-linux.png'))
+    root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=os.path.join(wd,'.','matrix-linux.png')))
     pass
 elif sys.platform.startswith('darwin'):
-    root.iconbitmap(resource_path('matrix-mac.icns'))
+    root.iconbitmap(os.path.join(wd,'.','matrix-mac.icns'))
 
 root.title("ASCII Camera")
 if getattr(sys, 'frozen', False):
@@ -176,7 +233,7 @@ ascii_image = ""
 
 # Fonction pour mettre à jour l'image capturée
 def capture_frame():
-    global frame
+    global frame, running
     if platform.system() == 'Windows':
         cap = cv2.VideoCapture(camera,cv2.CAP_DSHOW)
     elif platform.system() == 'Linux':
@@ -211,8 +268,7 @@ def capture_frame():
 
 # Fonction pour mettre à jour l'image ASCII
 def update_ascii_image():
-    global running
-    global ascii_image
+    global running, ascii_image
     while running and not stop.is_set():
         with frame_lock:
             f = frame
@@ -258,15 +314,15 @@ def update_tkinter():
             break
 
 def send_to_virtual_camera():
-    global running, ascii_image_result
+    global running, ascii_image_result, wd
 
-    # Paramètres de l'image
-    output_width = 1280
-    output_height = 720
+    # Paramètres de l'image, 
+    output_width = 1100
+    output_height = 620
     font_size = 12
 
     # Chargez une police pour afficher les caractères
-    font = ImageFont.truetype("VeraMono-Bold.ttf", font_size)
+    font = ImageFont.truetype(os.path.join(wd,'.','courier-new.ttf'), font_size)
 
     # Créez une nouvelle image avec les dimensions souhaitées et remplissez-la de blanc
     image = Image.new('RGB', (output_width, output_height), color='white')
@@ -285,9 +341,10 @@ def send_to_virtual_camera():
         
     image_data = BytesIO()
     image.save(image_data, format='PNG')
+    
     # Choisissez la largeur et la hauteur de la caméra virtuelle
-    width = 1280
-    height = 720
+    width = 640
+    height = 480
 
     # Créez un tampon pour stocker les images
     buffer = np.zeros((height, width, 3), dtype=np.uint8)
@@ -299,11 +356,13 @@ def send_to_virtual_camera():
             tkinter_thread_event.wait()  # Si vous utilisez un Event pour signaler la mise à jour de l'image ASCII
 
             # Convertissez le texte ASCII en image à l'aide de Pillow
-            # Convertissez le texte ASCII en image à l'aide de Pillow
-            img_pil = Image.new('RGBA', (width, height), (0, 0, 0, 255))
+            img_pil = Image.new('RGBA', (output_width, output_height), (0, 0, 0, 255))
             draw = ImageDraw.Draw(img_pil)
             draw.text((0, 0), ascii_image_result, font=font, fill=(0, 255, 0, 255))
-            img_np = np.array(img_pil)
+            
+            # Redimensionnez l'image PIL avant de la convertir en tableau NumPy
+            img_resized = img_pil.resize((width, height), resample=Image.LANCZOS)
+            img_np = np.array(img_resized)
 
             # Copiez l'image PIL dans le tampon NumPy
             buffer[:, :] = img_np[:, :, :3]
@@ -313,29 +372,32 @@ def send_to_virtual_camera():
 
             # Attendez un peu pour éviter de surcharger le CPU
             cam.sleep_until_next_frame()
-
+            if not running:
+                break
 
 tkinter_thread_event = threading.Event()
 
 # Lancement des threads
 capture_thread = threading.Thread(target=capture_frame)
-capture_thread.start()
 
 ascii_thread = threading.Thread(target=update_ascii_image)
-ascii_thread.start()
 
 tkinter_thread = threading.Thread(target=update_tkinter)
-tkinter_thread.start()
 
 # Création de l'image et des positions initiales pour la simulation de pluie
 resized_image = np.zeros((720, 1280), dtype=np.uint8)
 drop_positions = np.zeros(1280, dtype=int)
 
-rain_thread = threading.Thread(target=simulate_rain, args=(resized_image, drop_positions))
-rain_thread.start()
+create_rain_drops_thread = threading.Thread(target=create_rain_drops, args=(resized_image, drop_positions))
+erase_rain_columns_thread = threading.Thread(target=erase_rain_columns, args=(resized_image, drop_positions, columns_to_erase_queue))
 
 virtual_camera_thread = threading.Thread(target=send_to_virtual_camera)
-virtual_camera_thread.start()
+
+threads = [capture_thread, ascii_thread, tkinter_thread, create_rain_drops_thread, erase_rain_columns_thread, virtual_camera_thread]
+
+for thread in threads:
+    thread.daemon = True
+    thread.start()
 
 # Boucle principale de la fenêtre tkinter
 root.mainloop()
@@ -343,10 +405,9 @@ root.mainloop()
 # Arrêt propre du programme
 running = False
 stop.set()
-capture_thread.join()
-ascii_thread.join()
-tkinter_thread.join()
-rain_thread.join()
-virtual_camera_thread.join()
+
+for thread in threads:
+    thread.join(timeout=1.0)
+    time.sleep(1.001)
 
 sys.exit(0)

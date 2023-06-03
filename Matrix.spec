@@ -3,12 +3,17 @@
 
 block_cipher = None
 
+added_files = [
+        ('I:\\Matrix\\matrix.ico', '.'),
+        ('I:\\Matrix\\MatrixLogo.png', '.'),
+        ('I:\\Matrix\\courier-new.ttf', '.')
+    ]
 
 a = Analysis(
     ['ascii13.py'],
     pathex=[],
-    binaries=[('I:\\Matrix\\matrix.ico', '.'),('I:\\Matrix\\MatrixLogo.png', '.')],
-    datas=[('I:\\Matrix\\matrix.ico', '.'),('I:\\Matrix\\MatrixLogo.png', '.')],
+    binaries=[],
+    datas=added_files,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -19,6 +24,7 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 splash = Splash(
     'Matrix.PNG',

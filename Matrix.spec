@@ -6,11 +6,11 @@ block_cipher = None
 added_files = [
         ('I:\\Matrix\\matrix.ico', '.'),
         ('I:\\Matrix\\MatrixLogo.png', '.'),
-        ('I:\\Matrix\\courier-new.ttf', '.')
+        ('I:\\Matrix\\mtx.ttf', '.')
     ]
 
 a = Analysis(
-    ['ascii13.py'],
+    ['ascii14.py'],
     pathex=[],
     binaries=[],
     datas=added_files,

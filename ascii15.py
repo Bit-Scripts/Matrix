@@ -8,11 +8,22 @@ import random
 
 import cv2
 import numpy as np
-import tkinter as tk
-import pyglet
 import pyvirtualcam
 
-from PIL import Image, ImageFont, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
+if sys.platform == 'win32':
+    import ctypes
+    winVer = platform.win32_ver(release='')[0]
+    try:
+        if int(winVer) >= 10:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        elif int(winVer) == 8:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        else:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except (ImportError, AttributeError, OSError):
+        pass
 
 # Définition des caractères à utiliser pour l'ASCII art
 characters = ' ú.ù,:öøýü×ÖÅ³·ÈØÙÍÐ±´¶¹º¼Â²ÇËÒÓ¾Ú'
@@ -20,8 +31,6 @@ wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
 logo = cv2.imread(os.path.join(wd, '.', 'MatrixLogo.png'))
 size1, size2 = 1280, 301
 logo = cv2.resize(logo, (size1, size2))
-
-pyglet.font.add_file(os.path.join(wd,'mtx.ttf'))
 
 running = True
 camera = 0 # À modifier si ne fonctionne pas
@@ -32,10 +41,11 @@ global rain_intensity, last_ascii_image, rain_ascii_image
 rain_intensity = 0.5
 last_ascii_image, rain_ascii_image = "", ""
 columns_to_erase_queue = queue.Queue()
+columns_launched_queue = queue.Queue()
 image_updated = ""
 
 stop = threading.Event()
-frame, ascii_image = None, ""
+frame, ascii_image,  drop_of_water_image_ascii = None, "", ""
 
 # Fonction pour convertir une intensité en caractère ASCII
 def get_character(intensity):
@@ -84,17 +94,50 @@ def create_rain_drops(resized_image, drop_positions):
                 drop_positions[column] = row  # Mettre à jour la position de la goutte
                 # Mettre à jour l'image avec la goutte de pluie
                 resized_image[row][column] = 255 # Intensité maximale
+                # Ajouter uniquement les colonnes dans la queue
+                columns_launched_queue.put((column, row))
         # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
         a_image = image_to_ascii(resized_image)
         with ascii_image_lock:
             global ascii_image
             rain_ascii_image = a_image
-        if not running:
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
+            break
+        
+def create_rain_drop_of_water(drop_of_water_image, columns_launched_queue):
+    global running, drop_of_water_image_ascii, rain_ascii_image
+    max_rows = {}
+    while running:  
+        while not columns_launched_queue.empty():
+            # Mettre à jour les positions des gouttes de pluie
+            column, row = columns_launched_queue.get()
+            if column in max_rows:
+                max_rows[column] = max(max_rows[column], row)
+            else:
+                max_rows[column] = row
+
+        # Initialiser drop_of_water_image avec des zéros
+        drop_of_water_image = np.zeros_like(drop_of_water_image)
+
+        with ascii_image_lock:
+            for column, row in max_rows.items():
+                drop_of_water_image[row][column] = 255
+            # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
+            drop_of_water_image_ascii = image_to_ascii(drop_of_water_image)
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
             break
 
 # Effacer progressivement la pluie
 def erase_rain_columns(resized_image, drop_positions, columns_to_erase_queue):
-    global running, last_ascii_image, rain_ascii_image
+    global running, last_ascii_image, rain_ascii_image, columns_launched_queue
     while running:
         # Effacer progressivement les colonnes
         if not columns_to_erase_queue.empty():
@@ -112,22 +155,19 @@ def erase_rain_columns(resized_image, drop_positions, columns_to_erase_queue):
         # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
         a_image = image_to_ascii(resized_image)
         with ascii_image_lock:
-            global ascii_image
             rain_ascii_image = a_image
-        if not running:
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
             break
         
 # Fonction pour mettre à jour l'image capturée
-def capture_frame():
-    global frame, running
-    if platform.system() == 'Windows':
-        cap = cv2.VideoCapture(camera,cv2.CAP_DSHOW)
-    elif platform.system() == 'Linux':
-        cap = cv2.VideoCapture(camera)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+def capture_frame(ret, f):
+    global  frame, running, capture
     while running:
-        ret, f = cap.read()
+        ret, f = capture.read()
         if ret:
             # Redimensionner l'image capturée pour qu'elle s'adapte aux dimensions du canevas
             resized_frame = cv2.resize(f, (1280, 720))
@@ -142,7 +182,11 @@ def capture_frame():
             combined_frame = cv2.addWeighted(resized_frame, .5, canvas, 1, 0)
         with frame_lock:
             frame = combined_frame
-        if not running:
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
             break
 
 # Fonction pour mettre à jour l'image ASCII
@@ -157,149 +201,177 @@ def update_ascii_image():
                 ascii_image = a_image
                 
         time.sleep(0.001)  # Temps d'attente arbitraire
-        if not running:
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
             break
 
 def image_fusion():
-    global running, ascii_image_result, characters, ascii_image_result
+    global running, characters, ascii_image_result, rain_ascii_image, drop_of_water_image_ascii, rain_ascii_image_result
     while running:
+        rain_ascii_image_intermediate = ""
         rain_ascii_image_cut_line = ""      
         with ascii_image_lock:
             ascii_image_cut = ascii_image.split("\n")
             rain_ascii_image_cut = rain_ascii_image.split("\n")
+            drop_of_water_ascii_image_cut = drop_of_water_image_ascii.split("\n")
             ascii_image_result = ""
             ascii_image_intermediate = ""
             for i in range(len(ascii_image_cut)):
                 ascii_image_cut_line = list(ascii_image_cut[i])
                 rain_ascii_image_cut_line = list(rain_ascii_image_cut[i])
+                drop_of_water_ascii_image_cut_line = list(drop_of_water_ascii_image_cut[i])
                 for j in range(len(ascii_image_cut_line)):
                     if rain_ascii_image_cut_line[j] != ' ' and rain_ascii_image_cut_line[j] in characters:
-                        index_rain = characters.index(rain_ascii_image_cut_line[j])
-                        index_ascii = characters.index(ascii_image_cut_line[j])
-                        ascii_image_cut_line[j] = get_character(int((50+ index_rain + index_ascii) / 2)) if int((50 + index_rain + index_ascii) / 2) < 255 else 255
+                        index_rain = int(characters.index(rain_ascii_image_cut_line[j]) * 255 / len(characters))
+                        index_ascii = int(characters.index(ascii_image_cut_line[j]) * 255 / len(characters))
+                        if drop_of_water_ascii_image_cut_line[j] != ' ':
+                            ascii_image_cut_line[j] = ' '
+                        else:
+                            ascii_image_cut_line[j] = ' '
+                            rain_ascii_image_cut_line[j] = get_character(index_ascii)
                 ascii_image_intermediate += "".join(ascii_image_cut_line) + "\n"
+                rain_ascii_image_intermediate += "".join(rain_ascii_image_cut_line) + "\n"
         ascii_image_result = ascii_image_intermediate
+        rain_ascii_image_result = rain_ascii_image_intermediate
         time.sleep(0.001)
-        if not running:
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False        
             break
-
-# Fonction pour mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
-def update_tkinter():
-    global running, ascii_image_result
-    a_image = ascii_image_result
-    while running:
-        if a_image != ascii_image_result:
-            a_image = ascii_image_result
-            tkinter_thread_event.set()
-            w.configure(text=a_image)
-            w.update()
-            tkinter_thread_event.clear()
-        if not running:
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
             break
 
 def send_to_virtual_camera():
-    global running, ascii_image_result, wd, buffer, image_updated
-    # Choisissez la largeur et la hauteur de la caméra virtuelle
-    width = 640
-    height = 480
-    buffer = np.zeros((height, width, 3), dtype=np.uint8)
-    # Paramètres de l'image, 
-    output_width = 900
-    output_height = 480
-    font_size = 12   
-    # Chargez une police pour afficher les caractères
-    font = ImageFont.truetype(os.path.join(wd,'mtx.ttf'), font_size)
+    global running, ascii_image_result, drop_of_water_image_ascii, wd, buffer, image_updated, virtual_frame
+    width = 1280
+    height = 720
+    font_path = os.path.join(wd, 'mtx.ttf')
+
     while running:
-        # (À FAIRE : Attendez ici pour que l'image ASCII soit mise à jour)
-        tkinter_thread_event.wait()  # Si vous utilisez un Event pour signaler la mise à jour de l'image ASCII
-        # Convertissez le texte ASCII en image à l'aide de Pillow
-        img_pil = Image.new('RGBA', (output_width, output_height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img_pil)
-        draw.text((0, 0), ascii_image_result, font=font, fill=(0, 255, 0, 255))
-        # Redimensionnez l'image PIL avant de la convertir en tableau NumPy
-        img_resized = img_pil.resize((width, height), resample=Image.LANCZOS)
-        img_np = np.array(img_resized)
-        # Copiez l'image PIL dans le tampon NumPy
-        buffer[:, :] = img_np[:, :, :3]
-        image_updated = True
-        if not running:
+        # Capture the content of the canvas as an image
+        canvas_image = Image.new('RGB', (width, height), 'black')
+        draw = ImageDraw.Draw(canvas_image)
+        font = ImageFont.truetype(font_path, 16)
+        draw.text((0, 0), ascii_image_result, fill='#008800', font=font)
+        draw.text((0, 0), rain_ascii_image_result, fill='#00ff00', font=font)
+        draw.text((0, 0), drop_of_water_image_ascii, fill='white', font=font)
+        virtual_frame = cv2.cvtColor(np.array(canvas_image), cv2.COLOR_RGB2BGR)
+
+        # Affichez la miniature dans la fenêtre créée précédemment
+        cv2.imshow("Matrix rain", virtual_frame)
+
+        # Vérifiez si la fenêtre a été fermée en utilisant le bouton en croix
+        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+            running = False
             break
 
+        # Attendez une touche pour quitter
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
+            break
+
+    # Fermez la fenêtre et libérez les ressources
+    cv2.destroyAllWindows()
+
+
 def create_virtual_camera():
-    global running, buffer, image_updated
-    # Choisissez la largeur et la hauteur de la caméra virtuelle
-    width = 640
-    height = 480
-    # Créez et démarrez la caméra virtuelle
+    global running, virtual_frame
+    width = 1280
+    height = 720
     with pyvirtualcam.Camera(width, height, 30) as cam:
         while running:
-            if image_updated:
-                # Envoyez le tampon à la caméra virtuelle
-                cam.send(buffer)
-                # Attendez un peu pour éviter de surcharger le CPU
-                cam.sleep_until_next_frame()
-                image_updated = False
-            if not running:
+            # Redimensionne l'image pour qu'elle corresponde à la taille de la caméra virtuelle
+            resized_frame = cv2.resize(virtual_frame, (width, height))
+            cam.send(resized_frame)
+            cam.sleep_until_next_frame()
+            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+                running = False        
+                break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                running = False
                 break
 
-# Configuration et création des widgets
-# Création de la fenêtre tkinter
-root = tk.Tk()
-root.configure(bg='#000')
+# Ouverture de la caméra
+if platform.system() == 'Windows':
+    capture = cv2.VideoCapture(camera,cv2.CAP_DSHOW)
+elif platform.system() == 'Linux':
+    capture = cv2.VideoCapture(camera)
+    
+capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+ret, f = capture.read()
 
-
-sw = root.winfo_screenwidth()
-sh = root.winfo_screenheight()
-root.geometry("%dx%d+%d+%d" % (900, 480, (sw-900)/2, (sh-480)/2))
-directory = os.getcwd()
-#root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=directory + "/matrix-linux.png"))
-
-if sys.platform.startswith('win32'):
-    root.iconbitmap(os.path.join(wd,'.','matrix.ico'))
-elif sys.platform.startswith('linux'):
-    #root.iconbitmap(os.path.join(wd,'.','matrix-linux.png'))
-    root.tk.call('wm','iconphoto',root._w,tk.PhotoImage(file=os.path.join(wd,'.','matrix-linux.png')))
-    pass
-elif sys.platform.startswith('darwin'):
-    root.iconbitmap(os.path.join(wd,'.','matrix-mac.icns'))
-root.title("ASCII Camera")
 if getattr(sys, 'frozen', False):
     import pyi_splash
     # Fermeture du splash screen
     pyi_splash.update_text('UI Loaded ...')
     pyi_splash.close()
 
-# Création du widget Label pour afficher l'ASCII art
-w = tk.Label(root, text="", font=("mtx.ttf", 8), fg='#0f0', bg='#000')
-w.pack()
-
 # Variables partagées entre les threads
 frame = None
 ascii_image = ""
+
+# Affichage de l'image
+cv2.namedWindow("Matrix rain", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Matrix rain", 1280, 720)
+cv2.imshow("Matrix rain", f)
 
 
 tkinter_thread_event = threading.Event()
 buffer_thread_event = threading.Event()
 
 # Lancement des threads
-capture_thread = threading.Thread(target=capture_frame)
+capture_thread = threading.Thread(target=capture_frame, args=(ret, f))
 ascii_thread = threading.Thread(target=update_ascii_image)
 image_fusion_thread = threading.Thread(target=image_fusion)
-tkinter_thread = threading.Thread(target=update_tkinter)
 
 resized_image = np.zeros((720, 1280), dtype=np.uint8)
+drop_of_water_image = resized_image
+virtual_frame = cv2.cvtColor(np.array(resized_image), cv2.COLOR_RGB2BGR)
 drop_positions = np.zeros(1280, dtype=int)
 
 create_rain_drops_thread = threading.Thread(target=create_rain_drops, args=(resized_image, drop_positions))
+create_rain_drop_of_water_thread = threading.Thread(target=create_rain_drop_of_water, args=(drop_of_water_image, columns_launched_queue))
 erase_rain_columns_thread = threading.Thread(target=erase_rain_columns, args=(resized_image, drop_positions, columns_to_erase_queue))
+
+running = True
+image_updated = False
+buffer = None
 
 send_virtual_camera_thread = threading.Thread(target=send_to_virtual_camera)
 create_virtual_camera_thread = threading.Thread(target=create_virtual_camera)
-threads = [capture_thread, ascii_thread, image_fusion_thread, tkinter_thread, create_rain_drops_thread, erase_rain_columns_thread, send_virtual_camera_thread, create_virtual_camera_thread]
+
+threads = [capture_thread, ascii_thread, image_fusion_thread, create_rain_drops_thread, create_rain_drop_of_water_thread,erase_rain_columns_thread, send_virtual_camera_thread, create_virtual_camera_thread]
 
 for thread in threads:
     thread.daemon = True
     thread.start()
+    
+# Boucle principale
+while True:   
+    # Attendez un court délai
+    time.sleep(0.01)
+        
+    # Boucle principale de l'application
+    if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
+        running = False        
+        break
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        running = False
+        break
+    
+# Libération des ressources
+capture.release()
+cv2.destroyAllWindows()
+# Arrêt propre du programme
+running = False
+stop.set()
 
-# Boucle principale de la fenêtre tkinter
-root.mainloop()
+for thread in threads:
+    thread.join(timeout=1.0)
+    time.sleep(1.001)
+
+sys.exit(0)

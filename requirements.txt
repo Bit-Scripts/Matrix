@@ -1,8 +1,6 @@
-numpy
 opencv-python
-Pillow
 numpy
-thread6
-tk
 pyvirtualcam
-pyglet
+Pillow
+ctypes
+pyi_splash

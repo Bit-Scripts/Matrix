@@ -105,31 +105,30 @@ def create_rain_drops(resized_image, drop_positions):
     global running, last_ascii_image, rain_ascii_image
     drop_columns = []  # Liste des colonnes pour les gouttes de pluie
     while running:
-        # Générer une nouvelle goutte de pluie
-        if len(drop_columns) < 80:
-            column = random.randint(0, resized_image.shape[1] - 1)  # Choix aléatoire de la colonne
-            drop_columns.append(column)
-            drop_positions[column] = 0  # Initialiser la position de la goutte à la ligne supérieure
-        # Mettre à jour les positions des gouttes de pluie
-        for column in drop_columns:
-            row = drop_positions[column]
-            # Réinitialiser la colonne à zéro pour effacer la goutte précédente
-            if row >= resized_image.shape[0] - 1:
-                drop_columns.remove(column)
-                columns_to_erase_queue.put((column, row)) # Ajouter la colonne à effacer à la liste
-                for row_to_erase in range(0, drop_positions[column]):
-                    resized_image[row_to_erase][column] = 0
-            else:
-                row += 1  # Descendre la goutte d'une ligne
-                drop_positions[column] = row  # Mettre à jour la position de la goutte
-                # Mettre à jour l'image avec la goutte de pluie
-                resized_image[row][column] = 255 # Intensité maximale
-                # Ajouter uniquement les colonnes dans la queue
-                columns_launched_queue.put((column, row))
-        # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
-        a_image = image_to_ascii(resized_image)
         with ascii_image_lock:
-            global ascii_image
+            # Générer une nouvelle goutte de pluie
+            if len(drop_columns) < 80:
+                column = random.randint(0, resized_image.shape[1] - 1)  # Choix aléatoire de la colonne
+                drop_columns.append(column)
+                drop_positions[column] = 0  # Initialiser la position de la goutte à la ligne supérieure
+            # Mettre à jour les positions des gouttes de pluie
+            for column in drop_columns:
+                row = drop_positions[column]
+                # Réinitialiser la colonne à zéro pour effacer la goutte précédente
+                if row >= resized_image.shape[0] - 1:
+                    drop_columns.remove(column)
+                    for row_to_erase in range(0, drop_positions[column]):
+                        resized_image[row_to_erase][column] = 0
+                else:
+                    row += 1  # Descendre la goutte d'une ligne
+                    drop_positions[column] = row  # Mettre à jour la position de la goutte
+                    # Mettre à jour l'image avec la goutte de pluie
+                    for row_line in range(0, row - 2):
+                        resized_image[row_line][column] = 255 # Intensité maximale
+                    # Ajouter uniquement les colonnes dans la queue
+                    columns_launched_queue.put((column, row))
+            # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
+            a_image = image_to_ascii(resized_image)
             rain_ascii_image = a_image
         if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
             running = False        
@@ -142,20 +141,19 @@ def create_rain_drop_of_water(drop_of_water_image, columns_launched_queue):
     global running, drop_of_water_image_ascii, rain_ascii_image
     max_rows = {}
     while running:  
-        while not columns_launched_queue.empty():
-            # Mettre à jour les positions des gouttes de pluie
-            column, row = columns_launched_queue.get()
-            if column in max_rows:
-                max_rows[column] = max(max_rows[column], row)
-            else:
-                max_rows[column] = row
-
-        # Initialiser drop_of_water_image avec des zéros
-        drop_of_water_image = np.zeros_like(drop_of_water_image)
-
         with ascii_image_lock:
+            while not columns_launched_queue.empty():
+                # Mettre à jour les positions des gouttes de pluie
+                column, row = columns_launched_queue.get()
+                if column in max_rows:
+                    max_rows[column] = max(max_rows[column], row)
+                else:
+                    max_rows[column] = row
             for column, row in max_rows.items():
-                drop_of_water_image[row][column] = 255
+                for row_erase in range(0, row - 10):
+                    drop_of_water_image[row_erase][column] = 0
+                for row_create in range(row - 10, row + 1):
+                    drop_of_water_image[row_create][column] = 255
             # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
             drop_of_water_image_ascii = image_to_ascii(drop_of_water_image)
         if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
@@ -165,25 +163,6 @@ def create_rain_drop_of_water(drop_of_water_image, columns_launched_queue):
             running = False
             break
 
-# Effacer progressivement la pluie
-def erase_rain_columns():
-    global running, last_ascii_image, columns_launched_queue, erase_rain_ascii_image, erase_rain_image, drop_positions, resized_image
-    while running:
-        if not columns_to_erase_queue.empty():
-            while not columns_to_erase_queue.empty():
-                column, row = columns_to_erase_queue.get()
-                for row_to_erase in range(0, height):
-                    erase_rain_image[row_to_erase][column] = resized_image[row_to_erase][column]
-            with ascii_image_lock:
-                erase_rain_ascii_image = image_to_ascii(erase_rain_image)
-        if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-            running = False
-            break
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            running = False
-            break
-
-        
 # Fonction pour mettre à jour l'image capturée
 def capture_frame(ret, f):
     global  frame, running, capture
@@ -212,7 +191,7 @@ def capture_frame(ret, f):
 
 # Fonction pour mettre à jour l'image ASCII
 def update_ascii_image():
-    global running, ascii_image
+    global running, ascii_image, a_image, frame
     while running and not stop.is_set():
         with frame_lock:
             f = frame
@@ -235,28 +214,17 @@ def image_fusion():
         with ascii_image_lock:
             ascii_image_cut = ascii_image.split("\n")
             rain_ascii_image_cut = rain_ascii_image.split("\n")
-            drop_of_water_ascii_image_cut = drop_of_water_image_ascii.split("\n")
-            erase_rain_ascii_image_cut = erase_rain_ascii_image.split("\n")
-            ascii_image_intermediate = []
             rain_ascii_image_intermediate = []
             for i in range(len(ascii_image_cut)):
                 ascii_image_cut_line = list(ascii_image_cut[i])
                 rain_ascii_image_cut_line = list(rain_ascii_image_cut[i])
-                drop_of_water_ascii_image_cut_line = list(drop_of_water_ascii_image_cut[i])
-                erase_rain_ascii_image_cut_line = list(erase_rain_ascii_image_cut)
                 for j in range(len(rain_ascii_image_cut_line)):
-                    if j < len(ascii_image_cut_line) and j < len(rain_ascii_image_cut_line) and j < len(drop_of_water_ascii_image_cut_line) and j < len(erase_rain_ascii_image_cut_line):
-                        if (rain_ascii_image_cut_line[j] != ' ' and rain_ascii_image_cut_line[j] in characters):
-                            if drop_of_water_ascii_image_cut_line[j] != ' ':
-                                ascii_image_cut_line[j] = ' '
-                            else:
-                                rain_ascii_image_cut_line[j] = ascii_image_cut_line[j]
-                                ascii_image_cut_line[j] = ' '
-                ascii_image_intermediate.append("".join(ascii_image_cut_line))
+                    if j < len(ascii_image_cut_line):
+                        if rain_ascii_image_cut_line[j] != ' ' and rain_ascii_image_cut_line[j] in characters:
+                            rain_ascii_image_cut_line[j] = ascii_image_cut_line[j]
+                            ascii_image_cut_line[j] = ' '
                 rain_ascii_image_intermediate.append("".join(rain_ascii_image_cut_line))
-        ascii_image_result = "\n".join(ascii_image_intermediate)
-        rain_ascii_image_result = "\n".join(rain_ascii_image_intermediate)
-        time.sleep(0.001)
+            rain_ascii_image_result = "\n".join(rain_ascii_image_intermediate)
         if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
             running = False        
             break
@@ -271,7 +239,7 @@ def send_to_virtual_camera():
         canvas_image = Image.new('RGB', (width, height), 'black')
         draw = ImageDraw.Draw(canvas_image)
         font = ImageFont.truetype(font_path, ascii_font_size_width)
-        draw.text((0, 0), ascii_image_result, fill='#008800', font=font)
+        draw.text((0, 0), ascii_image, fill='#008800', font=font)
         draw.text((0, 0), rain_ascii_image_result, fill='#00ff00', font=font)
         hex_vars = ['f', 'e', 'd', 'c', 'b', 'a', '9', '8']
         for hex_var in hex_vars:
@@ -354,7 +322,6 @@ drop_positions = np.zeros(1280, dtype=int)
 
 create_rain_drops_thread = threading.Thread(target=create_rain_drops, args=(resized_image, drop_positions))
 create_rain_drop_of_water_thread = threading.Thread(target=create_rain_drop_of_water, args=(drop_of_water_image, columns_launched_queue))
-erase_rain_columns_thread = threading.Thread(target=erase_rain_columns, args=())
 
 running = True
 image_updated = False
@@ -363,7 +330,7 @@ buffer = None
 send_virtual_camera_thread = threading.Thread(target=send_to_virtual_camera)
 create_virtual_camera_thread = threading.Thread(target=create_virtual_camera)
 
-threads = [capture_thread, ascii_thread, image_fusion_thread, create_rain_drops_thread, create_rain_drop_of_water_thread, erase_rain_columns_thread, send_virtual_camera_thread, create_virtual_camera_thread]
+threads = [capture_thread, ascii_thread, image_fusion_thread, create_rain_drops_thread, create_rain_drop_of_water_thread, send_virtual_camera_thread, create_virtual_camera_thread]
 
 for thread in threads:
     thread.daemon = True

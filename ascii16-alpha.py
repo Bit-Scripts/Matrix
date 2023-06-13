@@ -5,18 +5,35 @@ import time
 import threading
 import queue
 import random
-import curses
 
 import cv2
 import numpy as np
 import pyvirtualcam
 
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QComboBox
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, pyqtSignal
+from PyQt6.QtGui import QKeyEvent, QImage, QCloseEvent, QIcon, QPixmap
+
 from PIL import Image, ImageDraw, ImageFont
 
+from camera_selector import CameraSelector
 
-class Matrix:
-    def __init__(self):
-        curses.initscr()
+class Worker(QThread):
+    signal = pyqtSignal(str)
+
+    def __init__(self, text):
+        super().__init__()
+        self.text = text
+
+    def run(self):
+        while True:
+            self.signal.emit(self.text)
+
+class Matrix(QMainWindow):
+    def __init__(self, camera_selector_instance, parent=None):
+        super(Matrix, self).__init__(parent)
+        
+        self.wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
         
         if sys.platform == 'win32':
             import ctypes
@@ -34,28 +51,18 @@ class Matrix:
         # Initialisez les variables globales ici
         self.running = True
         self.ascii_image = ""
+
+        self.capture.connect(self.on_camera_selected)
         
+        self.initUI()
+
         # dimention camera et affichage
         self.width = 1280
         self.height = 720
         
-        self.camera = 0
-        # Ouverture de la caméra
-        if platform.system() == 'Windows':
-            self.capture = cv2.VideoCapture(self.camera,cv2.CAP_DSHOW)
-        elif platform.system() == 'Linux':
-            self.capture = cv2.VideoCapture(self.camera)
-            
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        
-        # Lecture de la frame
-        ret, frame = self.capture.read()
-        
         # Définition des caractères à utiliser pour l'ASCII art
         self.characters = ' ú.ù,:öøýü×ÖÅ³·ÈØÙÍÐ±´¶¹º¼Â²ÇËÒÓ¾Ú'
-        self.wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
-        self.logo = cv2.imread(os.path.join(self.wd, '.', 'MatrixLogo.png'))
+        self.logo = cv2.imread(os.path.join(self.wd, 'MatrixLogo.png'))
         self.size1, self.size2 = 1280, 301
         self.logo = cv2.resize(self.logo, (self.size1, self.size2))
 
@@ -93,11 +100,6 @@ class Matrix:
         self.frame = None
         self.ascii_image = ""
 
-        # Affichage de l'image
-        cv2.namedWindow("Matrix rain", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Matrix rain", 1280, 720)
-        cv2.imshow("Matrix rain", frame)
-
         self.threads = []
         
         # initialisation des ascii art
@@ -113,37 +115,43 @@ class Matrix:
             self.rain_ascii_image_result += '\n'
             self.drop_of_water_image_ascii += '\n'
             self.erase_rain_ascii_image += '\n'
-        
+            
     def start_all_thread(self):
         # Lancement des threads
-        capture_thread = threading.Thread(target=self.capture_frame)
-        ascii_thread = threading.Thread(target=self.update_ascii_image)
-        image_fusion_thread = threading.Thread(target=self.image_fusion)
+        self.capture_thread = Worker("capture_thread")
+        self.ascii_thread = Worker("ascii_thread")
+        self.image_fusion_thread = Worker("capture_thread")
+        self.create_rain_drops_thread = Worker("capture_thread")
+        self.create_rain_drop_of_water_thread = Worker("capture_thread")
+        self.send_virtual_camera_thread = Worker("capture_thread")
+        self.create_virtual_camera_thread = Worker("capture_thread")
+        
+        self.capture_thread.signal.connect(target=self.capture_frame)
+        self.ascii_thread.signal.connect(target=self.update_ascii_image)
+        self.image_fusion_thread.signal.connect(target=self.image_fusion)
 
-        resized_image = np.zeros((720, 1280), dtype=np.uint8)
-        self.drop_of_water_image = resized_image
-        self.erase_rain_image = resized_image
-        self.virtual_frame = cv2.cvtColor(np.array(resized_image), cv2.COLOR_RGB2BGR)
+        self.resized_image = np.zeros((720, 1280), dtype=np.uint8)
+        self.drop_of_water_image = self.resized_image
+        self.erase_rain_image = self.resized_image
+        self.virtual_frame = cv2.cvtColor(np.array(self.resized_image), cv2.COLOR_RGB2BGR)
         self.drop_positions = np.zeros(1280, dtype=int)
 
-        create_rain_drops_thread = threading.Thread(target=self.create_rain_drops)
-        create_rain_drop_of_water_thread = threading.Thread(target=self.create_rain_drop_of_water)
-        erase_rain_columns_thread = threading.Thread(target=self.erase_rain_columns)
+        self.create_rain_drops_thread.signal.connect(target=self.create_rain_drops)
+        self.create_rain_drop_of_water_thread.signal.connect(target=self.create_rain_drop_of_water)
 
         self.image_updated = False
         self.buffer = None
 
-        send_virtual_camera_thread = threading.Thread(target=self.send_to_virtual_camera)
-        create_virtual_camera_thread = threading.Thread(target=self.create_virtual_camera)
+        self.send_virtual_camera_thread.signal.connect(target=self.send_to_virtual_camera)
+        self.create_virtual_camera_thread.signal.connect(target=self.create_virtual_camera)
 
-        self.threads = [capture_thread, 
-                        ascii_thread, 
-                        image_fusion_thread, 
-                        create_rain_drops_thread, 
-                        create_rain_drop_of_water_thread, 
-                        erase_rain_columns_thread, 
-                        send_virtual_camera_thread, 
-                        create_virtual_camera_thread
+        self.threads = [self.capture_thread, 
+                        self.ascii_thread, 
+                        self.image_fusion_thread, 
+                        self.create_rain_drops_thread, 
+                        self.create_rain_drop_of_water_thread, 
+                        self.send_virtual_camera_thread, 
+                        self.create_virtual_camera_thread
                         ]
 
         for thread in self.threads:
@@ -153,17 +161,44 @@ class Matrix:
     def stop(self):
         # Libération des ressources
         self.capture.release()
-        cv2.destroyAllWindows()
         # Arrêt propre du programme
         self.running = False
-        curses.endwin()
         for thread in self.threads:
             thread.join(timeout=1.0)
             time.sleep(1.001)
             sys.exit(0)
+    
+    
+    def initUI(self):
+        # Créez un widget central pour contenir le contenu de la fenêtre principale
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
+        # Créez un layout vertical pour organiser les widgets
+        self.layout = QVBoxLayout()
 
-    def run(self):   
+        # Appliquez le layout au widget central
+        self.setWindowIcon(self.window_icon)
+        self.window_icon = QIcon(os.path.join(self.wd, "icon-32.png"))
+        central_widget.setLayout(self.layout)
+        self.setWindowTitle("Matrix")
+        self.setGeometry(300, 300, 1280, 720)
+        camera_selector = CameraSelector()
+        self.setCentralWidget(camera_selector)
+
+    def camera_selected(self):
+        index = pyqtSignal(int)
+        
+        # Ouverture de la caméra
+        if platform.system() == 'Windows':
+            self.capture = cv2.VideoCapture(index,cv2.CAP_DSHOW)
+        elif platform.system() == 'Linux':
+            self.capture = cv2.VideoCapture(index)
+            
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+    def run(self, event: QKeyEvent):   
         # Capturez le premier frame en dehors de la boucle principale
         self.capture_frame()
 
@@ -179,14 +214,26 @@ class Matrix:
 
             # Capturez un nouveau frame avant la prochaine itération
             self.capture_frame()
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
         self.capture.release()
         cv2.destroyAllWindows()
+
+    def closeEvent(self, event: QCloseEvent):
+        self.running = False
+        self.stop()
+        event.accept()
+        
+    def keyPressEvent(self, event: QKeyEvent):
+        self.running = False
+        if event.key() == Qt.Key_Escape:
+            self.stop()
+            self.closeEvent()
+
+        self.start_all_thread()
+        self.run(event)
 
     # Fonction pour convertir une intensité en caractère ASCII
     def get_character(self, intensity):
@@ -215,47 +262,45 @@ class Matrix:
         return ascii_image
 
     #créer l'effets de pluie
-    def create_rain_drops(self):
+    def create_rain_drops(self, event: QKeyEvent):
         resized_image = np.zeros((720, 1280), dtype=np.uint8)
-        columns_to_erase_queue = self.columns_to_erase_queue
-        drop_columns = []
+        self.drop_columns
         drop_positions = np.zeros(1280, dtype=int)
         while self.running:
             # Générer une nouvelle goutte de pluie
-            if len(drop_columns) < 80:
+            if len(self.drop_columns) < 80:
                 column = random.randint(0, resized_image.shape[1] - 1)  # Choix aléatoire de la colonne
-                drop_columns.append(column)
+                self.drop_columns.append(column)
                 drop_positions[column] = 0  # Initialiser la position de la goutte à la ligne supérieure
             # Mettre à jour les positions des gouttes de pluie
-            for column in drop_columns:
+            for column in self.drop_columns:
                 row = drop_positions[column]
                 # Réinitialiser la colonne à zéro pour effacer la goutte précédente
                 if row >= resized_image.shape[0] - 1:
-                    drop_columns.remove(column)
-                    columns_to_erase_queue.put((column, row)) # Ajouter la colonne à effacer à la liste
+                    self.drop_columns.remove(column)
                     for row_to_erase in range(0, drop_positions[column]):
                         resized_image[row_to_erase][column] = 0
                 else:
                     row += 1  # Descendre la goutte d'une ligne
                     drop_positions[column] = row  # Mettre à jour la position de la goutte
                     # Mettre à jour l'image avec la goutte de pluie
-                    resized_image[row][column] = 255 # Intensité maximale
+                    for row_line in range(0, row - 2):
+                        resized_image[row_line][column] = 255 # Intensité maximale
                     # Ajouter uniquement les colonnes dans la queue
                     self.columns_launched_queue.put((column, row))
             # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
             self.resized_image = resized_image
             a_image = self.image_to_ascii(resized_image)
-            with self.ascii_image_lock:
-                self.rain_ascii_image = a_image
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            #with self.ascii_image_lock:
+            self.rain_ascii_image = a_image
+
+            if event.key() == Qt.Key_Escape:
                 self.running 
             
-    def create_rain_drop_of_water(self):
+    def create_rain_drop_of_water(self, event: QKeyEvent):
         max_rows = {}
         while self.running:  
+            #with self.ascii_image_lock:
             while not self.columns_launched_queue.empty():
                 # Mettre à jour les positions des gouttes de pluie
                 column, row = self.columns_launched_queue.get()
@@ -263,42 +308,20 @@ class Matrix:
                     max_rows[column] = max(max_rows[column], row)
                 else:
                     max_rows[column] = row
-
-            # Initialiser drop_of_water_image avec des zéros
-            drop_of_water_image = np.zeros_like(self.resized_image)
-
-            with self.ascii_image_lock:
-                for column, row in max_rows.items():
-                    drop_of_water_image[row][column] = 255
+            for column, row in max_rows.items():
+                for row_erase in range(0, row - 10):
+                    self.drop_of_water_image[row_erase][column] = 0
+                for row_create in range(row - 10, row + 1):
+                    self.drop_of_water_image[row_create][column] = 255
                 # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
-                self.drop_of_water_image_ascii = self.image_to_ascii(drop_of_water_image)
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                self.running = False
-                break
+                self.drop_of_water_image_ascii = self.image_to_ascii(self.drop_of_water_image)
 
-    # Effacer progressivement la pluie
-    def erase_rain_columns(self):
-        erase_rain_image = np.zeros((720, 1280), dtype=np.uint8)
-        while self.running:
-            if not self.columns_to_erase_queue.empty():
-                while not self.columns_to_erase_queue.empty():
-                    column, row = self.columns_to_erase_queue.get()
-                    for row_to_erase in range(0, self.height):
-                        erase_rain_image[row_to_erase][column] = self.resized_image[row_to_erase][column]
-                with self.ascii_image_lock:
-                    self.erase_rain_ascii_image = self.image_to_ascii(erase_rain_image)
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
 
     # Fonction pour mettre à jour l'image capturée
-    def capture_frame(self):
+    def capture_frame(self, event: QKeyEvent):
         while self.running:
             ret, f = self.capture.read()
             cv2.waitKey(0)
@@ -314,67 +337,50 @@ class Matrix:
                 canvas[logo_y:logo_y+self.size2, logo_x:logo_x+self.size1] = self.logo
                 # Combiner le canevas avec l'image capturée redimensionnée
                 combined_frame = cv2.addWeighted(resized_frame, .5, canvas, 1, 0)
-                with self.frame_lock:
-                    self.frame = combined_frame
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+                #with self.frame_lock:
+                self.frame = combined_frame
+
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
 
     # Fonction pour mettre à jour l'image ASCII
-    def update_ascii_image(self):
+    def update_ascii_image(self, event: QKeyEvent):
         while self.running:
             with self.frame_lock:
                 f = self.frame
             if f is not None:
                 self.y_image = self.image_to_ascii(f)
-                with self.ascii_image_lock:
-                    self.ascii_image = self.y_image
+                #with self.ascii_image_lock:
+                self.ascii_image = self.y_image
             time.sleep(0.001)  # Temps d'attente arbitraire
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            print(self.ascii_image)
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
 
-    def image_fusion(self):
+    def image_fusion(self, event: QKeyEvent):
         while self.running:
             with self.ascii_image_lock:
-                ascii_image_cut = self.ascii_image.split("\n")
+                self.ascii_image_cut = self.ascii_image.split("\n")
                 rain_ascii_image_cut = self.rain_ascii_image.split("\n")
-                drop_of_water_ascii_image_cut = self.drop_of_water_image_ascii.split("\n")
-                erase_rain_ascii_image_cut = self.erase_rain_ascii_image.split("\n")
-                ascii_image_intermediate = []
                 rain_ascii_image_intermediate = []
-                for i in range(len(ascii_image_cut)):
-                    ascii_image_cut_line = list(ascii_image_cut[i])
+                for i in range(len(self.ascii_image_cut)):
+                    ascii_image_cut_line = list(self.ascii_image_cut[i])
                     rain_ascii_image_cut_line = list(rain_ascii_image_cut[i])
-                    drop_of_water_ascii_image_cut_line = list(drop_of_water_ascii_image_cut[i])
-                    erase_rain_ascii_image_cut_line = list(erase_rain_ascii_image_cut)
                     for j in range(len(rain_ascii_image_cut_line)):
-                        if j < len(ascii_image_cut_line) and j < len(rain_ascii_image_cut_line) and j < len(drop_of_water_ascii_image_cut_line) and j < len(erase_rain_ascii_image_cut_line):
-                            if (rain_ascii_image_cut_line[j] != ' ' and rain_ascii_image_cut_line[j] in self.characters):
-                                if drop_of_water_ascii_image_cut_line[j] != ' ':
-                                    ascii_image_cut_line[j] = ' '
-                                else:
-                                    rain_ascii_image_cut_line[j] = self.ascii_image_cut_line[j]
-                                    ascii_image_cut_line[j] = ' '
-                    ascii_image_intermediate.append("".join(ascii_image_cut_line))
+                        if j < len(ascii_image_cut_line):
+                            if rain_ascii_image_cut_line[j] != ' ' and rain_ascii_image_cut_line[j] in self.characters:
+                                rain_ascii_image_cut_line[j] = ascii_image_cut_line[j]
+                                ascii_image_cut_line[j] = ' '
                     rain_ascii_image_intermediate.append("".join(rain_ascii_image_cut_line))
-            self.ascii_image_result = "\n".join(ascii_image_intermediate)
-            self.rain_ascii_image_result = "\n".join(rain_ascii_image_intermediate)
+                self.rain_ascii_image_result = "\n".join(rain_ascii_image_intermediate)
             time.sleep(0.001)
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False        
-                break
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
 
-    def send_to_virtual_camera(self):
+    def send_to_virtual_camera(self, event: QKeyEvent):
         while self.running:
             # Capture the content of the canvas as an image
             canvas_image = Image.new('RGB', (self.width, self.height), 'black')
@@ -390,34 +396,54 @@ class Matrix:
             self.virtual_frame = cv2.cvtColor(np.array(canvas_image), cv2.COLOR_RGB2BGR)
 
             # Affichez la miniature dans la fenêtre créée précédemment
-            cv2.imshow("Matrix rain", self.virtual_frame)
+            # Convertir l'image OpenCV en QImage
+            # height, width, channel = self.virtual_frame.shape
+            # bytes_per_line = 3 * width
+            # qimage = QImage(self.virtual_frame, width, height, bytes_per_line, QImage.Format_BGR888)
+            qimage = QImage(canvas_image, canvas_image.width, canvas_image.height, QImage.Format_RGBA8888)
+            # Créer un QLabel pour afficher l'image
+            image_label = QLabel()
+            image_label.setPixmap(QPixmap.fromImage(qimage))
 
-            # Vérifiez si la fenêtre a été fermée en utilisant le bouton en croix
-            if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                self.running = False
-                break
+            # Ajouter le QLabel à votre layout
+            self.layout.addWidget(image_label)
 
             # Attendez une touche pour quitter
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if event.key() == Qt.Key_Escape:
                 self.running = False
                 break
 
         # Fermez la fenêtre et libérez les ressources
         cv2.destroyAllWindows()
 
-    def create_virtual_camera(self):
-        with pyvirtualcam.Camera(self.width, self.height, 30) as cam:
+    def create_virtual_camera(self, event: QKeyEvent):
+        with pyvirtualcam.Camera(self.width, self.height, 30, device='/dev/video2') as cam:
             while self.running:
                 # Redimensionne l'image pour qu'elle corresponde à la taille de la caméra virtuelle
                 cam.send(self.virtual_frame)
                 cam.sleep_until_next_frame()
-                if cv2.getWindowProperty("Matrix rain", cv2.WND_PROP_VISIBLE) < 1:
-                    self.running = False        
-                    break
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                
+                if event.key() == Qt.Key_Escape:
                     self.running = False
                     break
 
+def main():
+    app = QApplication(sys.argv)
+    
+    wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
+    window_icon = QIcon(os.path.join(wd, "icon-32.png"))
+    
+    camera_selector = CameraSelector()
+    camera_selector.setWindowIcon(window_icon)
+    camera_selector.show()
+
+    # Wait for the CameraSelector window to close before continuing
+    app.exec()
+
+    matrix = Matrix(camera_selector.on_camera_selected)
+    matrix.setWindowIcon(window_icon)
+    matrix.run()
+    sys.exit(app.exec())
+    
 if __name__ == "__main__":
-    matrix = Matrix()
-    thread_run = matrix.run()
+    main()

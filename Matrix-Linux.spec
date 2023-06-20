@@ -3,12 +3,18 @@
 
 block_cipher = None
 
+added_files = [
+    ('/home/paul/Matrix/matrix.ico', '.'),
+    ('/home/paul/Matrix/MatrixLogo.png', '.'),
+    ('/home/paul/Matrix/Matrix.PNG', '.'),
+    ('/home/paul/Matrix/mtx.ttf', '.')
+]
 
 a = Analysis(
-    ['ascii12.py'],
+    ['ascii17.py'],
     pathex=[],
-    binaries=[('matrix-linux.png','.')],
-    datas=[('matrix-linux.png','.')],
+    binaries=[('/home/paul/Matrix/mtx.ttf', '.')],
+    datas=added_files,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -19,9 +25,10 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-splash = Splash(
-    'Matrix.PNG',
+
+pyi_splash = Splash('Matrix.PNG',
     binaries=a.binaries,
     datas=a.datas,
     text_pos=None,
@@ -30,14 +37,15 @@ splash = Splash(
     always_on_top=True,
 )
 
+
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries + [('matrix-linux.png','.', 'BINARY')],
+    a.binaries,
     a.zipfiles,
-    a.datas + [('matrix-linux.png','.', 'DATA')],
-    splash,
-    splash.binaries,
+    a.datas,
+    pyi_splash,
+    pyi_splash.binaries,
     [],
     name='Matrix',
     debug=False,
@@ -52,5 +60,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['/home/paul/matrix/matrix-linux.png'],
+    icon=['/home/paul/Matrix/matrix.ico']
 )

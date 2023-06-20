@@ -1,39 +1,95 @@
-import sys
 import os
 import platform
-import time
-import threading
 import queue
 import random
-
+import sys
+import threading
+import time
+import traceback
 import cv2
 import numpy as np
 import pyvirtualcam
-
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QComboBox
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent, QImage, QCloseEvent, QIcon, QPixmap
-
 from PIL import Image, ImageDraw, ImageFont
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRunnable, QObject, QThreadPool, pyqtSlot
+from PyQt6.QtGui import QCloseEvent, QIcon, QImage, QKeyEvent, QPixmap
+from PyQt6.QtWidgets import QApplication,QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from camera_selector import CameraSelector
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
 
-class Worker(QThread):
-    signal = pyqtSignal(str)
+    Supported signals are:
 
-    def __init__(self, text):
-        super().__init__()
-        self.text = text
+    finished
+        No data
 
+    error
+        tuple (exctype, value, traceback.format_exc() )
+
+    result
+        object data returned from processing, anything
+
+    progress
+        int indicating % progress
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+    progress = pyqtSignal(int)
+
+
+class Worker(QRunnable):
+    '''
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                    kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    '''
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+
+    @pyqtSlot()
     def run(self):
-        while True:
-            self.signal.emit(self.text)
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
 
 class Matrix(QMainWindow):
-    def __init__(self, camera_selector_instance, parent=None):
+    def __init__(self, parent=None):
         super(Matrix, self).__init__(parent)
         
         self.wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
+        
+        self.counter = 0        
         
         if sys.platform == 'win32':
             import ctypes
@@ -52,8 +108,16 @@ class Matrix(QMainWindow):
         self.running = True
         self.ascii_image = ""
 
-        self.capture.connect(self.on_camera_selected)
+        # self.camera_selector_instance.camera_selected.connect(self.handle_camera_selected)
         
+        # Ouverture de la caméra
+        if platform.system() == 'Windows':
+            self.capture = cv2.VideoCapture(0,cv2.CAP_DSHOW)
+        elif platform.system() == 'Linux':
+            self.capture = cv2.VideoCapture(0)
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
         self.initUI()
 
         # dimention camera et affichage
@@ -92,6 +156,7 @@ class Matrix(QMainWindow):
         
         if getattr(sys, 'frozen', False):
             import pyi_splash
+
             # Fermeture du splash screen
             pyi_splash.update_text('UI Loaded ...')
             pyi_splash.close()
@@ -115,61 +180,144 @@ class Matrix(QMainWindow):
             self.rain_ascii_image_result += '\n'
             self.drop_of_water_image_ascii += '\n'
             self.erase_rain_ascii_image += '\n'
-            
-    def start_all_thread(self):
-        # Lancement des threads
-        self.capture_thread = Worker("capture_thread")
-        self.ascii_thread = Worker("ascii_thread")
-        self.image_fusion_thread = Worker("capture_thread")
-        self.create_rain_drops_thread = Worker("capture_thread")
-        self.create_rain_drop_of_water_thread = Worker("capture_thread")
-        self.send_virtual_camera_thread = Worker("capture_thread")
-        self.create_virtual_camera_thread = Worker("capture_thread")
-        
-        self.capture_thread.signal.connect(target=self.capture_frame)
-        self.ascii_thread.signal.connect(target=self.update_ascii_image)
-        self.image_fusion_thread.signal.connect(target=self.image_fusion)
 
         self.resized_image = np.zeros((720, 1280), dtype=np.uint8)
         self.drop_of_water_image = self.resized_image
         self.erase_rain_image = self.resized_image
         self.virtual_frame = cv2.cvtColor(np.array(self.resized_image), cv2.COLOR_RGB2BGR)
         self.drop_positions = np.zeros(1280, dtype=int)
-
-        self.create_rain_drops_thread.signal.connect(target=self.create_rain_drops)
-        self.create_rain_drop_of_water_thread.signal.connect(target=self.create_rain_drop_of_water)
-
         self.image_updated = False
         self.buffer = None
 
-        self.send_virtual_camera_thread.signal.connect(target=self.send_to_virtual_camera)
-        self.create_virtual_camera_thread.signal.connect(target=self.create_virtual_camera)
+        print("prépare les threads")
+        # Lancement des threads
+        self.capture_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.capture_thread.maxThreadCount())
+        self.ascii_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.ascii_thread.maxThreadCount())
+        self.image_fusion_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.image_fusion_thread.maxThreadCount())
+        self.create_rain_drops_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.create_rain_drops_thread.maxThreadCount())
+        self.create_rain_drop_of_water_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.create_rain_drop_of_water_thread.maxThreadCount())
+        self.send_virtual_camera_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.send_virtual_camera_thread.maxThreadCount())
+        self.create_virtual_camera_thread = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.create_virtual_camera_thread.maxThreadCount())
+        
+        
+        self.threads = [
+            self.capture_thread,
+            self.ascii_thread,
+            self.image_fusion_thread,
+            self.create_rain_drops_thread,
+            self.create_rain_drop_of_water_thread,
+            self.send_virtual_camera_thread,
+            self.create_virtual_camera_thread
+        ]
+        
+        
+        self.timer = QTimer()
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.recurring_timer)
+        self.timer.start()
+            
+    def progress_fn(self, n):
+        print("%d%% done" % n)
 
-        self.threads = [self.capture_thread, 
-                        self.ascii_thread, 
-                        self.image_fusion_thread, 
-                        self.create_rain_drops_thread, 
-                        self.create_rain_drop_of_water_thread, 
-                        self.send_virtual_camera_thread, 
-                        self.create_virtual_camera_thread
-                        ]
+    def execute_this_fn(self, progress_callback):
+        for n in range(0, 5):
+            time.sleep(1)
+            progress_callback.emit(n*100/4)
 
-        for thread in self.threads:
-            thread.daemon = True
-            thread.start()
-    
+        return "Done."
+
+    def print_output(self, s):
+        print(s)
+
+    def thread_complete(self):
+        print("THREAD COMPLETE!")
+
+    def oh_no(self):
+        # Pass the function to execute
+        worker1 = Worker(target=self.capture_frame) # Any other args, kwargs are passed to the run function
+        worker1.signals.result.connect(self.print_output)
+        worker1.signals.finished.connect(self.thread_complete)
+        worker1.signals.progress.connect(self.progress_fn)
+        
+        self.capture_thread.start(worker1)
+        # Execute
+        self.threadpool.start(worker1)
+
+        # Pass the function to execute
+        worker2 = Worker(target=self.update_ascii_image) # Any other args, kwargs are passed to the run function
+        worker2.signals.result.connect(self.print_output)
+        worker2.signals.finished.connect(self.thread_complete)
+        worker2.signals.progress.connect(self.progress_fn)
+        # Execute
+        self.ascii_thread.start(worker2)
+
+        # Pass the function to execute
+        worker3 = Worker(target=self.image_fusion) # Any other args, kwargs are passed to the run function
+        worker3.signals.result.connect(self.print_output)
+        worker3.signals.finished.connect(self.thread_complete)
+        worker3.signals.progress.connect(self.progress_fn)
+        
+        # Execute
+        self.image_fusion_thread.start(worker3)
+
+        # Pass the function to execute
+        worker4 = Worker(target=self.create_rain_drops) # Any other args, kwargs are passed to the run function
+        worker4.signals.result.connect(self.print_output)
+        worker4.signals.finished.connect(self.thread_complete)
+        worker4.signals.progress.connect(self.progress_fn)
+        
+        # Execute
+        self.create_rain_drops_thread.start(worker4)
+
+        # Pass the function to execute
+        worker5 = Worker(target=self.create_rain_drop_of_water) # Any other args, kwargs are passed to the run function
+        worker5.signals.result.connect(self.print_output)
+        worker5.signals.finished.connect(self.thread_complete)
+        worker5.signals.progress.connect(self.progress_fn)
+        
+        # Execute
+        self.create_rain_drop_of_water_thread.start(worker5)
+        
+        # Pass the function to execute
+        worker6 = Worker(target=self.send_to_virtual_camera) # Any other args, kwargs are passed to the run function
+        worker6.signals.result.connect(self.print_output)
+        worker6.signals.finished.connect(self.thread_complete)
+        worker6.signals.progress.connect(self.progress_fn)
+        
+        # Execute
+        self.send_virtual_camera_thread.start(worker6)
+        
+        # Pass the function to execute
+        worker7 = Worker(target=self.create_virtual_camera) # Any other args, kwargs are passed to the run function
+        worker7.signals.result.connect(self.print_output)
+        worker7.signals.finished.connect(self.thread_complete)
+        worker7.signals.progress.connect(self.progress_fn)
+        
+        # Execute
+        self.create_virtual_camera_thread.start(worker7)
+        
+    def recurring_timer(self):
+        self.counter +=1
+        print("Counter: %d" % self.counter)
+            
     def stop(self):
-        # Libération des ressources
-        self.capture.release()
+        print("entre dans stop()\n")
+        if self.capture:
+            self.capture.release()
         # Arrêt propre du programme
         self.running = False
-        for thread in self.threads:
-            thread.join(timeout=1.0)
-            time.sleep(1.001)
-            sys.exit(0)
+        sys.exit(0)
     
     
     def initUI(self):
+        print("entre dans initUI()\n")
         # Créez un widget central pour contenir le contenu de la fenêtre principale
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -178,65 +326,62 @@ class Matrix(QMainWindow):
         self.layout = QVBoxLayout()
 
         # Appliquez le layout au widget central
-        self.setWindowIcon(self.window_icon)
         self.window_icon = QIcon(os.path.join(self.wd, "icon-32.png"))
+        self.setWindowIcon(self.window_icon)
         central_widget.setLayout(self.layout)
         self.setWindowTitle("Matrix")
         self.setGeometry(300, 300, 1280, 720)
-        camera_selector = CameraSelector()
-        self.setCentralWidget(camera_selector)
 
-    def camera_selected(self):
-        index = pyqtSignal(int)
-        
-        # Ouverture de la caméra
-        if platform.system() == 'Windows':
-            self.capture = cv2.VideoCapture(index,cv2.CAP_DSHOW)
-        elif platform.system() == 'Linux':
-            self.capture = cv2.VideoCapture(index)
-            
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    def handle_camera_selected(self, selected_camera_capture):
+        self.capture = selected_camera_capture
 
-    def run(self, event: QKeyEvent):   
-        # Capturez le premier frame en dehors de la boucle principale
-        self.capture_frame()
+    
+    def run(self):
+        print("entre dans run()\n")
+        # Capture the first frame outside the main loop
+        #self.frame()
+        self.oh_no()
 
-        # Initialisez la variable 'running'
+        # Initialize the 'running' variable
         running = True
 
         while running:
-            if not self.capture_frame():
+            if not self.frame():
                 break
-
-            # Temporisation pour ralentir la boucle
+            
+            # Delay to slow down the loop
             time.sleep(0.1)
 
-            # Capturez un nouveau frame avant la prochaine itération
-            self.capture_frame()
+            # Capture a new frame before the next iteration
+            self.frame()
 
-            if event.key() == Qt.Key_Escape:
-                self.running = False
+            # if event.key() == Qt.Key_Escape:
+                # self.running = False
+            if self.running == False:
+                running == self.running 
                 break
         self.capture.release()
         cv2.destroyAllWindows()
 
     def closeEvent(self, event: QCloseEvent):
+        print("entre dans closeEvent()\n")
         self.running = False
         self.stop()
-        event.accept()
+        super(Matrix, self).closeEvent(event)
         
     def keyPressEvent(self, event: QKeyEvent):
+        print("entre dans keyPressEvent()\n")
         self.running = False
         if event.key() == Qt.Key_Escape:
+            self.running = False
             self.stop()
             self.closeEvent()
-
-        self.start_all_thread()
-        self.run(event)
+        else:
+            super(Matrix, self).keyPressEvent(event)
 
     # Fonction pour convertir une intensité en caractère ASCII
     def get_character(self, intensity):
+        print("entre dans get_character()\n")
         characters = self.characters
         num_levels = len(characters)
         level = intensity * (num_levels - 1) // 255
@@ -245,6 +390,7 @@ class Matrix(QMainWindow):
 
     # Fonction pour convertir une image en ASCII art
     def image_to_ascii(self, image):
+        print("entre dans image_to_ascii()\n")
         ascii_font_size_width = self.ascii_font_size_width
         ascii_font_size_height = self.ascii_font_size_height
         if len(image.shape) > 2 and image.shape[2] == 3:
@@ -263,6 +409,7 @@ class Matrix(QMainWindow):
 
     #créer l'effets de pluie
     def create_rain_drops(self, event: QKeyEvent):
+        print("entre dans create_rain_drop()\n")
         resized_image = np.zeros((720, 1280), dtype=np.uint8)
         self.drop_columns
         drop_positions = np.zeros(1280, dtype=int)
@@ -291,13 +438,14 @@ class Matrix(QMainWindow):
             # Mettre à jour l'affichage de l'ASCII art dans la fenêtre tkinter
             self.resized_image = resized_image
             a_image = self.image_to_ascii(resized_image)
-            #with self.ascii_image_lock:
-            self.rain_ascii_image = a_image
+            with self.ascii_image_lock:
+                self.rain_ascii_image = a_image
 
             if event.key() == Qt.Key_Escape:
                 self.running 
             
     def create_rain_drop_of_water(self, event: QKeyEvent):
+        print("entre dans create_rain_drop_of_water()\n")
         max_rows = {}
         while self.running:  
             #with self.ascii_image_lock:
@@ -322,6 +470,7 @@ class Matrix(QMainWindow):
 
     # Fonction pour mettre à jour l'image capturée
     def capture_frame(self, event: QKeyEvent):
+        print("entre dans capture_frame()\n")
         while self.running:
             ret, f = self.capture.read()
             cv2.waitKey(0)
@@ -337,8 +486,8 @@ class Matrix(QMainWindow):
                 canvas[logo_y:logo_y+self.size2, logo_x:logo_x+self.size1] = self.logo
                 # Combiner le canevas avec l'image capturée redimensionnée
                 combined_frame = cv2.addWeighted(resized_frame, .5, canvas, 1, 0)
-                #with self.frame_lock:
-                self.frame = combined_frame
+                with self.frame_lock:
+                    self.frame = combined_frame
 
             if event.key() == Qt.Key_Escape:
                 self.running = False
@@ -346,13 +495,14 @@ class Matrix(QMainWindow):
 
     # Fonction pour mettre à jour l'image ASCII
     def update_ascii_image(self, event: QKeyEvent):
+        print("entre dans update_ascii_image()\n")
         while self.running:
             with self.frame_lock:
                 f = self.frame
             if f is not None:
                 self.y_image = self.image_to_ascii(f)
-                #with self.ascii_image_lock:
-                self.ascii_image = self.y_image
+                with self.ascii_image_lock:
+                    self.ascii_image = self.y_image
             time.sleep(0.001)  # Temps d'attente arbitraire
             print(self.ascii_image)
             if event.key() == Qt.Key_Escape:
@@ -360,6 +510,7 @@ class Matrix(QMainWindow):
                 break
 
     def image_fusion(self, event: QKeyEvent):
+        print("entre dans image_fusion()\n")
         while self.running:
             with self.ascii_image_lock:
                 self.ascii_image_cut = self.ascii_image.split("\n")
@@ -381,6 +532,7 @@ class Matrix(QMainWindow):
                 break
 
     def send_to_virtual_camera(self, event: QKeyEvent):
+        print("entre dans send_to_virtual_camera()\n")
         while self.running:
             # Capture the content of the canvas as an image
             canvas_image = Image.new('RGB', (self.width, self.height), 'black')
@@ -396,15 +548,24 @@ class Matrix(QMainWindow):
             self.virtual_frame = cv2.cvtColor(np.array(canvas_image), cv2.COLOR_RGB2BGR)
 
             # Affichez la miniature dans la fenêtre créée précédemment
+            cv2.imshow("Matrix rain", self.virtual_frame)
+        
+            # Affichez la miniature dans la fenêtre créée précédemment
             # Convertir l'image OpenCV en QImage
-            # height, width, channel = self.virtual_frame.shape
-            # bytes_per_line = 3 * width
-            # qimage = QImage(self.virtual_frame, width, height, bytes_per_line, QImage.Format_BGR888)
-            qimage = QImage(canvas_image, canvas_image.width, canvas_image.height, QImage.Format_RGBA8888)
+
+
+
+            rgb_image = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+            bytes_per_line = ch * w
+            qimage = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
             # Créer un QLabel pour afficher l'image
+            # Affichez la miniature dans la fenêtre créée précédemment
+
             image_label = QLabel()
             image_label.setPixmap(QPixmap.fromImage(qimage))
-
+            #self.setCentralWidget(image_label)
             # Ajouter le QLabel à votre layout
             self.layout.addWidget(image_label)
 
@@ -417,6 +578,7 @@ class Matrix(QMainWindow):
         cv2.destroyAllWindows()
 
     def create_virtual_camera(self, event: QKeyEvent):
+        print("entre dans create_virtual_camera()\n")
         with pyvirtualcam.Camera(self.width, self.height, 30, device='/dev/video2') as cam:
             while self.running:
                 # Redimensionne l'image pour qu'elle corresponde à la taille de la caméra virtuelle
@@ -428,21 +590,10 @@ class Matrix(QMainWindow):
                     break
 
 def main():
+    print("entre dans main()\n")
     app = QApplication(sys.argv)
-    
-    wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
-    window_icon = QIcon(os.path.join(wd, "icon-32.png"))
-    
-    camera_selector = CameraSelector()
-    camera_selector.setWindowIcon(window_icon)
-    camera_selector.show()
-
-    # Wait for the CameraSelector window to close before continuing
-    app.exec()
-
-    matrix = Matrix(camera_selector.on_camera_selected)
-    matrix.setWindowIcon(window_icon)
-    matrix.run()
+    main_window = Matrix()
+    main_window.show()
     sys.exit(app.exec())
     
 if __name__ == "__main__":

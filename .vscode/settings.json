@@ -5,10 +5,17 @@
     "editor.codeLensFontFamily": "Cascadia Code",
     "scm.inputFontFamily": "Cascadia Code",
     "notebook.output.fontFamily": "Cascadia Code",
-    "terminal.integrated.fontFamily": "Cascadia Code",
+    "terminal.integrated.fontFamily": "monospace",
     "chat.editor.fontFamily": "Cascadia Code",
     "chat.editor.fontWeight": "Cascadia Code",
     "editor.fontLigatures": true,
     "editor.fontVariations": false,
-    "files.autoSave": "afterDelay"
+    "files.autoSave": "afterDelay",
+    "genieai.enableConversationHistory": false,
+    "compile-hero.disable-compile-files-on-did-save-code": false,
+    "python.testing.pytestArgs": [
+        "venv"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

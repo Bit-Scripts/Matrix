@@ -4,10 +4,11 @@
 block_cipher = None
 
 added_files = [
-    ('/home/paul/Matrix/matrix.ico', '.'),
+    ('/home/paul/Matrix/matrix-linux.png', '.'),
     ('/home/paul/Matrix/MatrixLogo.png', '.'),
     ('/home/paul/Matrix/Matrix.PNG', '.'),
-    ('/home/paul/Matrix/mtx.ttf', '.')
+    ('/home/paul/Matrix/mtx.ttf', '.'),
+    ('/home/paul/Matrix/icon-32.png', '.')
 ]
 
 a = Analysis(
@@ -60,5 +61,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['/home/paul/Matrix/matrix.ico']
+    icon=['/home/paul/Matrix/matrix-linux.png']
 )

@@ -6,6 +6,7 @@ block_cipher = None
 added_files = [
     ('I:\\Matrix\\matrix.ico', '.'),
     ('I:\\Matrix\\MatrixLogo.png', '.'),
+    ('I:\\Matrix\\icon-32.png', '.'),
     ('I:\\Matrix\\Matrix.PNG', '.'),
     ('I:\\Matrix\\mtx.ttf', '.')
 ]

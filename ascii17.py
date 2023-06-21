@@ -10,18 +10,14 @@ import numpy as np
 import pyvirtualcam
 import threading
 from PIL import Image, ImageDraw, ImageFont
-from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer, QThread
+from PyQt6 import QtCore
 from PyQt6.QtGui import QCloseEvent, QIcon, QImage, QKeyEvent, QPixmap, QColor, QPainter, QFont, QFontDatabase
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton
-
-class Communicator(QObject):
-    update_image_label_signal = pyqtSignal(QImage)
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton, QFrame
 
 class CameraApp(QMainWindow):
-    def __init__(self):
+    def __init__(self, matrix):
+        self.matrix = matrix
         super().__init__()
         self.init_ui()
         
@@ -73,11 +69,12 @@ class CameraApp(QMainWindow):
         camera_name = camera_names[index - 1]
         index = camera_indices[index - 1]
         self.label.setText(f"Matrix Launched with {camera_name}")  # Utilise setText pour mettre à jour le texte du QLabel
-        self.matrix = Matrix()
+        self.matrix = matrix
         self.matrix.setCameraIndex(index)
-        self.close()
+        #self.matrix.cameraSelected.emit(index)  # Émettre le signal avec l'index de la caméra sélectionnée
         self.matrix.show()  # Affichage de la fenêtre Matrix
         print("Matrix Launched")
+        self.close()
 
     def populate_camera_selector(self):
         print("entre dans populate_camera_selector()")
@@ -123,35 +120,24 @@ class CameraApp(QMainWindow):
     def get_cameras_windows(self):
         print("entre dans get_cameras_windows()")
         try:
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            from pywinusb import hid
+            from pygrabber.dshow_graph import FilterGraph
+            
         except ImportError:
-            print("Installez pywinusb avec 'pip install pywinusb'")
+            print("Installez pygrabber avec 'pip install pygrabber'")
             return {}
 
         camera_indices = []
         camera_names = []
 
         # Get a list of all connected HID devices
-        all_devices = hid.find_all_hid_devices()
+        devices = FilterGraph().get_input_devices()
 
-        # Filter the devices to only get cameras
-        camera_devices = [device for device in all_devices if re.search("camera|webcam", device.product_name, re.IGNORECASE)]
-
-        for index, device in enumerate(camera_devices):
-            cap = cv2.VideoCapture(index)
-            if cap is None or not cap.isOpened():
-                cap.release()
-                continue
-
-            camera_name = device.product_name
-            if "infrared" in camera_name.lower() or "ir" in camera_name.lower():
-                continue  # Ignore the infrared camera
-            camera_indices.append(index)
-            camera_names.append(camera_name)
-            cap.release()
-
+        camera_names, camera_indices = [], []
+        
+        for device_index, device_name in enumerate(devices):
+            camera_names.append(device_name)
+            camera_indices.append(device_index)
+            
         return camera_names, camera_indices
 
 
@@ -203,19 +189,71 @@ class CameraApp(QMainWindow):
         print("entre dans closeEvent()")
         if self.timer.isActive():
             self.timer.stop()
-        
+
+
+class VirtualCameraThread(QThread):
+    def __init__(self):
+        super().__init__()
+    def run(self):
+        global running, init_global
+        running = True
+        if init_global:
+            print("entre dans create_virtual_camera()\n")
+            if sys.platform.startswith("linux"):
+                while running:
+                    try:
+                        virtual_frame = self.virtual_frame
+                        virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
+                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, device='/dev/video4') as cam:
+                            if not running:
+                                break
+                            cam.send(virtual_frame_resized)
+                            cam.sleep_until_next_frame()
+                    except Exception as e:
+                        print(f"Erreur dans create_virtual_camera: {e}")
+                        pass
+            elif sys.platform.startswith("win32"): 
+                while running:
+                    try:
+                        virtual_frame = self.virtual_frame
+                        virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
+                        if virtual_frame_resized is None:
+                            virtual_frame_resized = self.old_frame
+                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, backend ='unitycapture') as cam:
+                            cam.send(virtual_frame_resized)
+                            cam.sleep_until_next_frame()
+                    except Exception as e:
+                        print(f"Erreur dans create_virtual_camera: {e}")
+                        pass
+                    self.old_frame = virtual_frame_resized
+            init_global = False
+    def resize_image(self, image, width, height):
+        resized_image = cv2.resize(image, (width, height))
+        return resized_image
+    
+    def update_frame(self, virtual_frame):
+        self.virtual_frame = virtual_frame
+        self.old_frame = self.virtual_frame
+            
+    def stop(self):
+        global running
+        running = False
+        self.quit()
+        self.wait()
+        self.deleteLater()
+        self.finished.emit()
+
 class Matrix(QMainWindow):
     def __init__(self):
         super().__init__()
         self.threads = []
         self.wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
-        
         self.running = True
         
         self.font_path = os.path.join(self.wd, '.', 'mtx.ttf')
         
         # Créez une file d'attente pour chaque variable partagée
-        global columns_launched_queue, frame_queue, ascii_image_result_queue, rain_ascii_image_queue, drop_of_water_image_ascii_queue, virtual_frame_queue, running
+        global columns_launched_queue, frame_queue, ascii_image_result_queue, rain_ascii_image_queue, drop_of_water_image_ascii_queue, virtual_frame_queue, running, init_global
         columns_launched_queue = queue.Queue()
         frame_queue = queue.Queue()
         ascii_image_result_queue = queue.Queue()
@@ -225,11 +263,11 @@ class Matrix(QMainWindow):
         self.queues = [columns_launched_queue, frame_queue, ascii_image_result_queue, rain_ascii_image_queue, drop_of_water_image_ascii_queue, virtual_frame_queue]
         
         running = True
-        
-        self.communicator = Communicator()
-        self.communicator.update_image_label_signal.connect(self.update_image_label)
-        
+        self.UIdefine = False
+        init_global = True
+
         if sys.platform == 'win32':
+            # import ctypes
             import ctypes
             winVer = platform.win32_ver(release='')[0]
             try:
@@ -278,7 +316,33 @@ class Matrix(QMainWindow):
             rain_ascii_image += '\n'
             rain_ascii_image_result += '\n'
             drop_of_water_image_ascii += '\n'
-    
+            
+        self.virtual_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        self.virtual_camera_thread = VirtualCameraThread()
+
+    def stop_virtual_camera(self):
+        if self.virtual_camera_thread is not None:
+            self.virtual_camera_thread.stop()
+            self.virtual_camera_thread.wait()
+            self.virtual_camera_thread = None
+        
+    @QtCore.pyqtSlot(np.ndarray, result=bool)
+    def emit_update_images_signal(self, virtual_frame: np.ndarray):
+        self.virtual_frame = virtual_frame
+        self.virtual_camera_thread.update_frame(self.virtual_frame)
+        if init_global:
+            self.virtual_camera_thread.start()
+        self.update_image_label(self.virtual_frame)
+
+    def update_image_label(self, virtual_frame):
+        rgb_image = cv2.cvtColor(virtual_frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        qimage = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        self.image_label.setPixmap(QPixmap.fromImage(qimage))
+        self.image_label.setScaledContents(True)
+
+
     def update_counter(self):
         print("entre dans update_counter()\n")
         self.counter += 1
@@ -339,16 +403,16 @@ class Matrix(QMainWindow):
         
         painter.end()
         if random.randint(0, 9) % 3 == 0:
-            self.image_label.setPixmap(pixmap)
+            pass #self.image_label.setPixmap(pixmap)
     
-    def launch_multithread(self):
+    def launch_threads(self):
         print("entre dans launch_multithread()\n")
         self.methods = [
+            self.capture_frame,
             self.update_ascii_image,
             self.create_rain_drops,
-            self.send_to_virtual_camera,
-            self.create_virtual_camera
-        ]
+            self.send_to_virtual_camera
+            ]
         
         # Lancement des threads
         count = 1
@@ -358,8 +422,6 @@ class Matrix(QMainWindow):
             print(f"{method.__name__} dans le thread {count}\n")
             self.threads.append(thread)
             count += 1
-            
-        self.initUI()
             
             
     def setCameraIndex(self, index):
@@ -380,18 +442,14 @@ class Matrix(QMainWindow):
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.capture_fps = 30
         cap = self.cap
-        self.thread_capture_frame = threading.Thread(target=self.capture_frame)
-        self.thread_capture_frame.start()
+        time.sleep(1)
+        self.initUI()
         
-        self.threads.append(self.thread_capture_frame)
-        
-        self.launch_multithread()  # Lancement des threads
-        
-
     def stop(self):
         print("entre dans stop()\n")
         global running
         running = False
+        self.virtual_camera_thread.stop()
         for queue in self.queues:
             for _ in range(3):
                 queue.put(None)
@@ -402,53 +460,12 @@ class Matrix(QMainWindow):
             time.sleep(.251)
         #print("Tous les Multiples Threads ont étés arrêtées\n")
         sys.exit(0)
-        
-    def update_image_label(self, qimage):
-        self.image_label.setPixmap(QPixmap.fromImage(qimage))
     
-    def initUI(self):
-        print("entre dans initUI()\n")
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.FramelessWindowHint)
-        
-        # Appliquez le layout au widget central
-        self.window_icon = QIcon(os.path.join(self.wd, "icon-32.png"))
-        self.setWindowIcon(self.window_icon)
-        self.setWindowTitle("Matrix")
-        self.setGeometry(300, 300, 854, 480)
-        
-        # Créez une instance de QWidget
-        self.central_widget = QWidget()
-        # Définissez le widget central
-        self.setCentralWidget(self.central_widget)
-        
-        
-        # Utilisez le QWidget central comme parent pour le QVBoxLayout
-        self.layout = QVBoxLayout(self.central_widget) 
-        
-        # Instanciez QLabel et assignez-le à self.image_label
-        self.image_label = QLabel()
-
-        # Créez une QPixmap vide de taille 854x480
-        pixmap = QPixmap(854, 480)
-        pixmap.fill(QColor(0, 0, 0))
-        
-        # Attribuez la QPixmap au QLabel
-        self.image_label.setPixmap(pixmap)
-
-        # Ajoutez le QLabel image_label au layout
-        self.layout.addWidget(self.image_label)
-        
-        # self.setLayout(self.layout)
-
-        #self.launch_multithread()
-        self.show()
-        self.camera_app = CameraApp()
-        self.camera_app.close()
-
     def closeEvent(self, event: QCloseEvent):
         global running
         print("entre dans closeEvent()\n")
         running = False
+        self.virtual_camera_thread.stop()
         for queue in self.queues:
             for _ in range(3):
                 queue.put(None)
@@ -463,6 +480,7 @@ class Matrix(QMainWindow):
     def keyPressEvent(self, event: QKeyEvent):
         global running
         print("entre dans keyPressEvent()\n")
+        self.virtual_camera_thread.stop()
         if event.key() == Qt.Key.Key_Escape:
             running = False
             self.stop()
@@ -470,6 +488,43 @@ class Matrix(QMainWindow):
         else:
             super(Matrix, self).keyPressEvent(event)
 
+    
+    def initUI(self):
+        print("entre dans initUI()\n")
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.FramelessWindowHint)
+        
+        frame = QFrame(self)
+        frame.setFrameStyle(QFrame.Shape.NoFrame) 
+        
+        # Appliquez le layout au widget central
+        self.window_icon = QIcon(os.path.join(self.wd, "icon-32.png"))
+        self.setWindowIcon(self.window_icon)
+        self.setWindowTitle("Matrix")
+        self.setGeometry(300, 300, 854, 480)
+        self.setStyleSheet("background-color: black;")
+        
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.central_widget.setStyleSheet("background-color: black;")
+        
+        self.layout = QVBoxLayout(self.central_widget) 
+        
+        self.image_label = QLabel()
+        self.image_label.setStyleSheet("background-color: black;")
+        
+        pixmap = QPixmap(854, 480)
+        pixmap.fill(QColor(0, 0, 0))
+        
+        self.image_label.setPixmap(pixmap)
+        
+        self.layout.addWidget(self.image_label)
+        
+        self.show()
+        self.camera_app = CameraApp(self)
+        self.camera_app.close()
+
+        self.UIdefine = True
+        
     # Fonction pour convertir une intensité en caractère ASCII
     def get_character(self, intensity):
         characters = ' ú.ù,:öøýü×ÖÅ³·ÈØÙÍÐ±´¶¹º¼Â²ÇËÒÓ¾Ú'
@@ -544,36 +599,43 @@ class Matrix(QMainWindow):
     # Fonction pour mettre à jour l'image capturée
     def capture_frame(self):
         global frame_queue, cap, running
-        capture = cap
         print("entre dans capture_frame()\n" + str(running))
         wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
         width, height = 854, 480
         logo = cv2.imread(os.path.join(wd, 'MatrixLogo.png'))
         size1, size2 = 854, 150
         logo = cv2.resize(logo, (size1, size2))       
+        message = True  
+        get_camera = False    
         while running:
             try:
-                self.communicator.update_image_label_signal.connect(self.update_image_label)
-                ret, frame = capture.read()
-                f = frame
-                if ret:
-                    # Redimensionner l'image capturée pour qu'elle s'adapte aux dimensions du canevas
-                    resized_frame = cv2.resize(f, (width, height))
-                    # Créer un canevas vide
-                    canvas = np.zeros((height, width, 3), dtype=np.uint8)
-                    # Calculer les coordonnées pour placer le logo au centre du canevas
-                    logo_x = int((width - size1) / 2)
-                    logo_y = 0
-                    # Dessiner le logo sur le canevas
-                    canvas[logo_y:logo_y+size2, logo_x:logo_x+size1] = logo
-                    # Combiner le canevas avec l'image capturée redimensionnée
-                    combined_frame = cv2.addWeighted(resized_frame, .5, canvas, 1, 0)
-                    
-                    frame = combined_frame
-                    frame_queue.put(frame)
+                if not (cap is None): 
+                    capture = cap
+                    if not get_camera:
+                        print(f"Dans capture_frame: La camera est définit")
+                        get_camera = True
+                    ret, frame = capture.read()
+                    f = frame
+                    if ret:
+                        # Redimensionner l'image capturée pour qu'elle s'adapte aux dimensions du canevas
+                        resized_frame = cv2.resize(f, (width, height))
+                        # Créer un canevas vide
+                        canvas = np.zeros((height, width, 3), dtype=np.uint8)
+                        # Calculer les coordonnées pour placer le logo au centre du canevas
+                        logo_x = int((width - size1) / 2)
+                        logo_y = 0
+                        # Dessiner le logo sur le canevas
+                        canvas[logo_y:logo_y+size2, logo_x:logo_x+size1] = logo
+                        # Combiner le canevas avec l'image capturée redimensionnée
+                        combined_frame = cv2.addWeighted(resized_frame, .5, canvas, 1, 0)
+                        
+                        frame = combined_frame
+                        frame_queue.put(frame)
                     
             except Exception as e:
-                print(f"Erreur dans capture_frame: {e}")
+                if message:
+                    print(f"Erreur dans capture_frame: {e}")
+                    message = False
 
     # Fonction pour mettre à jour l'image ASCII
     def update_ascii_image(self):
@@ -607,10 +669,9 @@ class Matrix(QMainWindow):
         ascii_image_result = ""
         rain_ascii_image = ""
         drop_of_water_image_ascii = ""
-        
-        try:
-            print("entre dans send_to_virtual_camera()\n" + str(running))
-            while running:
+        print("entre dans send_to_virtual_camera()\n" + str(running))
+        while running:        
+            try:
                 if not ascii_image_result_queue.empty():
                     while not ascii_image_result_queue.empty():
                         ascii_image_result = ascii_image_result_queue.get()
@@ -635,57 +696,19 @@ class Matrix(QMainWindow):
                 draw.text((0, 0), drop_of_water_image_ascii, fill='white', font=font)
                 virtual_frame = cv2.cvtColor(np.array(canvas_image), cv2.COLOR_RGB2BGR)
 
-                rgb_image = cv2.cvtColor(virtual_frame, cv2.COLOR_BGR2RGB)
-                h, w, ch = rgb_image.shape
-                bytes_per_line = ch * w
-                qimage = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-                
-                self.communicator.update_image_label_signal.emit(qimage)
+                if self.UIdefine:
+                    QtCore.QMetaObject.invokeMethod(self, 'emit_update_images_signal', Qt.ConnectionType.QueuedConnection, QtCore.Q_ARG(np.ndarray, virtual_frame))
 
-                virtual_frame = virtual_frame
                 virtual_frame_queue.put(virtual_frame)
 
-        except Exception as e:
-            print(f"Erreur dans send_to_virtual_camera: {e}")
-
-    def create_virtual_camera(self):
-        global virtual_frame_queue, running
-        print("entre dans create_virtual_camera()\n")
-        virtual_frame = np.zeros((480, 854, 3), dtype=np.uint8)
-        old_virtual_frame = virtual_frame
-        while running:
-            try:
-                if sys.platform.startswith("linux"):
-                    with pyvirtualcam.Camera(width=854, height=480, fps=30, device='/dev/video4') as cam:
-                        if not virtual_frame_queue.empty():
-                            while not virtual_frame_queue.empty():
-                                virtual_frame = virtual_frame_queue.get()
-                            cam.send(virtual_frame)
-                            cam.sleep_until_next_frame()
-                        else:
-                            virtual_frame = old_virtual_frame
-                            cam.send(virtual_frame)
-                            cam.sleep_until_next_frame()
-                            # raise ValueError("virtual_frame n'est pas encore disponible")
-                else:                
-                    with pyvirtualcam.Camera(width=854, height=480, fps=30) as cam:
-                        if not virtual_frame_queue.empty():
-                            while not virtual_frame_queue.empty():
-                                virtual_frame = virtual_frame_queue.get()
-                            cam.send(virtual_frame)
-                            cam.sleep_until_next_frame()
-                        else:
-                            virtual_frame = old_virtual_frame
-                            cam.send(virtual_frame)
-                            cam.sleep_until_next_frame()
-                            #raise ValueError("virtual_frame n'est pas encore disponible")
-                old_virtual_frame = virtual_frame
             except Exception as e:
-                print(f"Erreur dans create_virtual_camera: {e}")
-                pass
+                print(f"Erreur dans send_to_virtual_camera: {e}")
 
 if __name__ == "__main__":
     app = QApplication([])
-    camera_app = CameraApp()
+    matrix = Matrix() 
+    camera_app = CameraApp(matrix)
+    matrix.hide()
     camera_app.show()
+    matrix.launch_threads()  # Appel de la méthode de lancement des threads
     app.exec()

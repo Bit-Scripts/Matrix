@@ -197,6 +197,7 @@ class VirtualCameraThread(QThread):
     def run(self):
         global running, init_global
         running = True
+        self.video_device = self.find_virtual_cameras_on_linux()
         if init_global:
             print("entre dans create_virtual_camera()\n")
             if sys.platform.startswith("linux"):
@@ -204,7 +205,7 @@ class VirtualCameraThread(QThread):
                     try:
                         virtual_frame = self.virtual_frame
                         virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
-                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, device='/dev/video4') as cam:
+                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, device=f"{self.video_device}") as cam:
                             if not running:
                                 break
                             cam.send(virtual_frame_resized)
@@ -230,7 +231,18 @@ class VirtualCameraThread(QThread):
     def resize_image(self, image, width, height):
         resized_image = cv2.resize(image, (width, height))
         return resized_image
-    
+
+    def find_virtual_cameras_on_linux(self):
+        import pyudev
+        context = pyudev.Context()
+        devices = context.list_devices(subsystem='video4linux')
+        video_device = ""
+        for device in devices:
+            product_id = device.get('ID_V4L_PRODUCT')
+            if product_id == 'Dummy video device (0x0000)':
+                video_device = device.device_node
+        return video_device
+        
     def update_frame(self, virtual_frame):
         self.virtual_frame = virtual_frame
         self.old_frame = self.virtual_frame

@@ -1,51 +1,97 @@
 - - - -
-    
-# MATRIX #
-  
-Capture your WebCam in real time to an ASCII Art rendering in a Tkinter window, all in Python. 
 
-- - - -  
+# MATRIX #
+
+Capture your WebCam in real time to an ASCII Art renderer in a Qt6 window and to a virtual webcam, all in Python.
+
+Pour la version en français rendez-vous [ici](./README.md)
+
+- - - -
+
 ## Installation ##
-  
-__**Steps needed**__ to install Matrix on your personal computer.   
+
+__**Steps required**__ to install Matrix on your personal computer.
+
 * Get Python:
-* **On Windows**: go to the official website [python.org](https://www.python.org/). 
-* **On MacOS** : you can choose between [homebrew](https://brew.sh/) or the official website [python.org](https://www.python.org/).
-* **On Linux** : install **Python** via your **packages manager**.
-* Attention at the time of the installation only from the official site do not forget to check the box add **the path or the variable Path** and that the use will be **available for all users** of your computer.  
+
+* **On Windows**: visit the official website [python.org](https://www.python.org/).
+
+* **On MacOS**: choose between [homebrew](https://brew.sh/index_fr) or the official [python.org](https://www.python.org/) site.
+
+* **On Linux** : install **Python3**(>=3.6) via your **package manager**.
+
+* When installing from the official website only, don't forget to check the box **add path or Path variable** and that usage will be **available to all users** of your computer.
+
+  
 
 <img src="https://linuxhint.com/wp-content/uploads/2022/09/How-to-Add-Python-to-Windows-Path-3.png" data-canonical-src="https://linuxhint.com/wp-content/uploads/2022/09/How-to-Add-Python-to-Windows-Path-3.png" width="512" height="288" />
 
-__**And to Finish:**__
+  
+
+__**And finally:**__
+
+  
 
 * If you haven't already done so: install Git on your computer, more info [here](https://git-scm.com/book/fr/v2/D%C3%A9marrage-rapide-Installation-de-Git)
-* Then open a terminal and enter the following commands:    
-   
+
+* Then open a terminal and enter the following commands:
+
 ```bash
+
 $ git clone https://github.com/Bit-Scripts/Matrix.git
+
 $ cd Matrix
-$ pip install -r requirements.txt
+
+pip install -r requirements.txt
+
 ```
+
+  
 
 - - - -
+## Configuration ##
+
+* **On Windows**: please follow the instructions to install 'unitycamera' [available here](https://github.com/schellingb/UnityCapture)
+* **On Linux** : 
+    1.  Install v4l2loopback via your package manager.
+        - On Ubuntu/Debian: `sudo apt-get install v4l2loopback`
+        - On Arch: `sudo pacman -S v4l2loopback`
+        - On Fedora: `sudo dnf install v4l2loopback`
+        - On openSUSE: `sudo zypper install v4l2loopback`
+    2. After installation, ensure that the v4l2loopback module is loaded on your system by running the following command:
+    ```bash
+    $ lsmod | grep v4l2loopback
+    ```
+    3. Then activate the v4l2loopback module
+    ```bash
+    $ sudo modprobe v4l2loopback
+    ```
+
 ## Usage ##
-   
+
 ```bash
-$ python ascii12.py #the program starts
+
+$ python ascii17.py #the program launches
+
 ```
+I advise you to use a venv or anaconda to manage the installation of the necessary packages via pip.
 
-⚠️⚠️  
-If the window remains black, look at the file ascii12.py by opening it, with a text editor for example the notepad of Windows and change the line 17 `camera = 1` (the possible values of the variable camera are 0, 1 or 2) (more info line 67 we see there the command with cv2 of OpenCV to capture the WebCam) Indeed, with Python I use the OpenCV library to capture your WebCam, only the Webcam can have the number 0, 1 or 2 (for example 1 for me). If the number of your webcam is not the right one, the script will not work, so you will have to change the value to find the one that matches your hardware.   
-⚠️⚠️     
+Otherwise, binaries are available for direct download from the project releases. 
+  
 
-Here is an example of rendering:
-   
+Here's an example of rendering:
+
 <img src="./Matrix.GIF" data-canonical-src="https://cdn.discordapp.com/attachments/1077054466181832724/1077627784656080936/image.png" width="512" height="288" />
 
+  
+
 - - - -
+
 ## To Contribute ##
 
-We welcome contributions from the community! To contribute, please follow these steps:
+  
+
+We welcome contributions from the community! To contribute, please follow the steps below:
 
 * Fork the project
 * Create a new branch (git checkout -b feature/feature-name)

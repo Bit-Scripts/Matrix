@@ -1,6 +1,0 @@
-opencv-python
-numpy
-pyvirtualcam
-Pillow
-ctypes
-pyi_splash

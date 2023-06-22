@@ -279,7 +279,6 @@ class Matrix(QMainWindow):
         init_global = True
 
         if sys.platform == 'win32':
-            # import ctypes
             import ctypes
             winVer = platform.win32_ver(release='')[0]
             try:

@@ -1,0 +1,8 @@
+pywin32
+numpy
+opencv-python-headless
+Pillow
+pygrabber
+thread6
+pyqt6
+ctypes

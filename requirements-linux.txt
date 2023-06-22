@@ -1,0 +1,7 @@
+numpy
+opencv-python-headless
+Pillow
+pyudev
+v4l2py
+thread6
+pyqt6

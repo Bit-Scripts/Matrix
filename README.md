@@ -77,7 +77,7 @@ $  python  ascii17.py  #le programme se lance
 ```
 Je vous conseil de passé par un venv ou anaconda pour gérer l'installation des paquets nécessaires via pip.
 
-Sinon des binaires sont disponibles directement à télécharger sur les releases du projet. 
+Sinon des binaires sont disponibles directement à télécharger sur les [releases](https://github.com/Bit-Scripts/Matrix/releases) du projet. 
   
 
 Voici un exemple de rendu :

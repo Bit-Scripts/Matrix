@@ -76,7 +76,7 @@ $ python ascii17.py #the program launches
 ```
 I advise you to use a venv or anaconda to manage the installation of the necessary packages via pip.
 
-Otherwise, binaries are available for direct download from the project releases. 
+Otherwise, binaries are available for direct download from the project [releases](https://github.com/Bit-Scripts/Matrix/releases). 
   
 
 Here's an example of rendering:

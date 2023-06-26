@@ -104,7 +104,7 @@ class CameraApp(QMainWindow):
             from AVFoundation import AVCaptureDevice
             
         except ImportError:
-            print("Installez pyobjc avec 'pip install pyobjc'")
+            self.label.setText("Installez pyobjc avec 'pip install pyobjc'")
             return {}
 
         camera_indices = []
@@ -282,11 +282,11 @@ class VirtualCamera():
 class VideoTreatment():
     def __init__(self, frame, rain_00ff00_image, rain_00ee00_image, rain_00dd00_image, rain_00cc00_image, rain_00bb00_image, rain_00aa00_image, rain_009900_image, rain_008800_image, rain_007700_image, drop_of_water_image_ascii, matrix_instance):
         self.matrix_instance = matrix_instance
-        self.len_array_width = 110
-        self.len_array_height = 34
+        self.len_array_width = 220
+        self.len_array_height = 68
         super().__init__()
         self.frame = frame
-        self.rain_drops = [[-1] * 110 for _ in range(2)]
+        self.rain_drops = [[-1] * 220 for _ in range(2)]
         self.rain_00ff00_image = rain_00ff00_image
         self.rain_00ee00_image = rain_00ee00_image
         self.rain_00dd00_image = rain_00dd00_image
@@ -354,7 +354,6 @@ class VideoTreatment():
                 f = frame
                 y_image = self.image_to_ascii(f)
                 ascii_image = y_image   
-                time.sleep(0.001)
                 self.create_rain_drops(ascii_image)
             except Exception as e:
                 print(f"Erreur dans video_treatment.update_ascii_image: {e}")
@@ -363,7 +362,7 @@ class VideoTreatment():
     def create_rain_drops(self, ascii_image):
         if self.running:
             try:
-                for column in range(110):
+                for column in range(220):
                     if self.rain_drops[0][column] == -1:
                         if self.drop_of_water_image_ascii[0][column] == ' ':
                             self.rain_drops[0][column] = 0
@@ -395,37 +394,52 @@ class VideoTreatment():
                             self.drop_of_water_image_ascii[row - 1][column] = ' '
                             self.rain_00ff00_image[row - 1][column] = ascii_image[row - 1][column]
                         if row - 2 >= 0 and row - 2 < self.len_array_height:
-                            self.rain_00ff00_image[row - 2][column] = ' '
-                            self.rain_00ee00_image[row - 2][column] = ascii_image[row - 2][column]
+                            self.rain_00ff00_image[row - 2][column] = ascii_image[row - 2][column]
                         if row - 3 >= 0 and row - 3 < self.len_array_height:
-                            self.rain_00ee00_image[row - 3][column] = ' '
-                            self.rain_00dd00_image[row - 3][column] = ascii_image[row - 3][column]
+                            self.rain_00ff00_image[row - 3][column] = ' '
+                            self.rain_00ee00_image[row - 3][column] = ascii_image[row - 3][column]
                         if row - 4 >= 0 and row - 4 < self.len_array_height:
-                            self.rain_00dd00_image[row - 4][column] = ' '
-                            self.rain_00cc00_image[row - 4][column] = ascii_image[row - 4][column]
-                        if row - 5 >= 0 and row - 5 < self.len_array_height:
-                            self.rain_00cc00_image[row - 5][column] = ' '
-                            self.rain_00bb00_image[row - 5][column] = ascii_image[row - 5][column]
+                            self.rain_00ee00_image[row - 4][column] = ascii_image[row - 4][column]
+                        if row - 5 >= 0 and row - 5 < self.len_array_height:                            
+                            self.rain_00ee00_image[row - 5][column] = ' '
+                            self.rain_00dd00_image[row - 5][column] = ascii_image[row - 5][column]
                         if row - 6 >= 0 and row - 6 < self.len_array_height:
-                            self.rain_00bb00_image[row - 6][column] = ' '
-                            self.rain_00aa00_image[row - 6][column] = ascii_image[row - 6][column]
+                            self.rain_00dd00_image[row - 6][column] = ascii_image[row - 6][column]
                         if row - 7 >= 0 and row - 7 < self.len_array_height:
-                            self.rain_00aa00_image[row - 7][column] = ' '
-                            self.rain_009900_image[row - 7][column] = ascii_image[row - 7][column]
+                            self.rain_00dd00_image[row - 7][column] = ' '
+                            self.rain_00cc00_image[row - 7][column] = ascii_image[row - 7][column]
                         if row - 8 >= 0 and row - 8 < self.len_array_height:
-                            self.rain_009900_image[row - 8][column] = ' '
-                            self.rain_008800_image[row - 8][column] = ascii_image[row - 8][column]
+                            self.rain_00cc00_image[row - 8][column] = ' '
+                            self.rain_00bb00_image[row - 8][column] = ascii_image[row - 8][column]
                         if row - 9 >= 0 and row - 9 < self.len_array_height:
-                            self.rain_008800_image[row - 9][column] = ' '
-                            self.rain_007700_image[row - 9][column] = ascii_image[row - 9][column]
-                        if row - 10 >= 0 and row - 10 < self.len_array_height:    
-                            self.rain_007700_image[row - 10][column] = ' '
+                            self.rain_00bb00_image[row - 9][column] = ' '
+                            self.rain_00aa00_image[row - 9][column] = ascii_image[row - 9][column]
+                        if row - 10 >= 0 and row - 10 < self.len_array_height:
+                            self.rain_00aa00_image[row - 10][column] = ' '
+                            self.rain_009900_image[row - 10][column] = ascii_image[row - 10][column]
+                        if row - 11 >= 0 and row - 11 < self.len_array_height:
+                            self.rain_009900_image[row - 11][column] = ascii_image[row - 11][column]
+                        if row - 12 >= 0 and row - 12 < self.len_array_height:
+                            self.rain_009900_image[row - 12][column] = ' '
+                            self.rain_008800_image[row - 12][column] = ascii_image[row - 12][column]
+                        if row - 13 >= 0 and row - 13 < self.len_array_height:
+                            self.rain_008800_image[row - 13][column] = ascii_image[row - 13][column]
+                        if row - 14 >= 0 and row - 14 < self.len_array_height:
+                            self.rain_008800_image[row - 14][column] = ' '
+                            self.rain_007700_image[row - 14][column] = ascii_image[row - 14][column]
+                        if row - 15 >= 0 and row - 15 < self.len_array_height:    
+                            self.rain_007700_image[row - 15][column] = ' '
                         if self.rain_00bb00_image[self.len_array_height - 1][column] != ' ':
                             self.rain_00bb00_image[self.len_array_height - 1][column] = ' '
-                            self.rain_00aa00_image[self.len_array_height - 2][column] = ' '
-                            self.rain_009900_image[self.len_array_height - 3][column] = ' '
-                            self.rain_008800_image[self.len_array_height - 4][column] = ' '
-                            self.rain_007700_image[self.len_array_height - 5][column] = ' '
+                            self.rain_00bb00_image[self.len_array_height - 2][column] = ' '
+                            self.rain_00aa00_image[self.len_array_height - 3][column] = ' '
+                            self.rain_00aa00_image[self.len_array_height - 4][column] = ' '
+                            self.rain_009900_image[self.len_array_height - 5][column] = ' '
+                            self.rain_009900_image[self.len_array_height - 6][column] = ' '
+                            self.rain_008800_image[self.len_array_height - 7][column] = ' '
+                            self.rain_008800_image[self.len_array_height - 8][column] = ' '
+                            self.rain_007700_image[self.len_array_height - 9][column] = ' '
+                            self.rain_007700_image[self.len_array_height - 10][column] = ' '
 
                 ascii_image_result = ""
                 drop_of_water_image_ascii_result = ""
@@ -487,7 +501,7 @@ class VideoTreatment():
     def send_to_virtual_camera(self, ascii_image_result, rain_00ff00_image_result, rain_00ee00_image_result, rain_00dd00_image_result, rain_00cc00_image_result, rain_00bb00_image_result, rain_00aa00_image_result, rain_009900_image_result, rain_008800_image_result, rain_007700_image_result, drop_of_water_image_ascii_result):
         if self.running:
             width, height = 848, 480
-            ascii_font_size_width = 16
+            ascii_font_size_width = 8
             wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
             font_path = os.path.join(wd, '.', 'mtx.ttf')
             font = ImageFont.truetype(font_path, ascii_font_size_width)
@@ -554,14 +568,14 @@ class Matrix(QMainWindow):
         self.cap = None
         self.timer_capture = QTimer()
         self.timer_capture.timeout.connect(self.capture_frame)
-        self.timer_capture.start(33) 
+        self.timer_capture.start(100) 
 
         self.rain_intensity = 0.5
         self.image_updated = ""
 
         width, height = 848, 480
 
-        self.ascii_font_size_width = 20
+        self.ascii_font_size_width = 8
         self.ascii_font_size_height = self.ascii_font_size_width * 9 / 16
         
         self.font_path = os.path.join(self.wd, 'mtx.ttf')
@@ -572,8 +586,8 @@ class Matrix(QMainWindow):
         self.virtual_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         
         frame = None
-        self.len_array_width = 110
-        self.len_array_height = 34
+        self.len_array_width = 220
+        self.len_array_height = 68
         drop_of_water_image_ascii = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         rain_00ff00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         rain_00ee00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
@@ -694,7 +708,6 @@ class Matrix(QMainWindow):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 848)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap.set(cv2.CAP_PROP_FPS, 60)
-        time.sleep(1)
         
     def stop(self):
         # print("entre dans stop()\n")
@@ -730,6 +743,7 @@ class Matrix(QMainWindow):
         if not self.UIdefine:
             # print("entre dans matrix.initUI()\n")
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.FramelessWindowHint)
+            self.setStyleSheet("background-color: black;")
             
             frame = QFrame(self)
             frame.setFrameStyle(QFrame.Shape.NoFrame) 

@@ -201,31 +201,31 @@ class VirtualCameraThread(QThread):
         if init_global:
             print("entre dans create_virtual_camera()\n")
             if sys.platform.startswith("linux"):
-                while running:
-                    try:
-                        virtual_frame = self.virtual_frame
-                        virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
-                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, device=f"{self.video_device}") as cam:
+                with pyvirtualcam.Camera(width=1280, height=720, fps=30, device=f"{self.video_device}") as cam:
+                    while running:
+                        try:
+                            virtual_frame = self.virtual_frame
+                            virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
                             if not running:
                                 break
                             cam.send(virtual_frame_resized)
                             cam.sleep_until_next_frame()
-                    except Exception as e:
-                        print(f"Erreur dans create_virtual_camera: {e}")
-                        pass
+                        except Exception as e:
+                            print(f"Erreur dans create_virtual_camera: {e}")
+                            pass
             elif sys.platform.startswith("win32"): 
-                while running:
-                    try:
-                        virtual_frame = self.virtual_frame
-                        virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
-                        if virtual_frame_resized is None:
-                            virtual_frame_resized = self.old_frame
-                        with pyvirtualcam.Camera(width=1280, height=720, fps=30, backend ='unitycapture') as cam:
+                with pyvirtualcam.Camera(width=1280, height=720, fps=30, backend ='unitycapture') as cam:
+                    while running:
+                        try:
+                            virtual_frame = self.virtual_frame
+                            virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
+                            if virtual_frame_resized is None:
+                                virtual_frame_resized = self.old_frame
                             cam.send(virtual_frame_resized)
                             cam.sleep_until_next_frame()
-                    except Exception as e:
-                        print(f"Erreur dans create_virtual_camera: {e}")
-                        pass
+                        except Exception as e:
+                            print(f"Erreur dans create_virtual_camera: {e}")
+                            pass
                     self.old_frame = virtual_frame_resized
             init_global = False
     def resize_image(self, image, width, height):

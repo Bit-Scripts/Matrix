@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon, QImage, QKeyEvent, QPixmap, QColor, QPainter, QFont, QFontDatabase
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton, QFrame
-if sys.platform == 'win32': 
+if sys.platform == 'win32' or sys.platform == 'darwin': 
     import qdarktheme
 
 class CameraApp(QMainWindow):
@@ -100,24 +100,24 @@ class CameraApp(QMainWindow):
 
 
     def get_cameras_mac(self):
-        # print("entre dans get_cameras_mac()")
         try:
-            import Quartz
+            from AVFoundation import AVCaptureDevice
+            
         except ImportError:
-            self.label.setText("Installez pyobjc avec 'pip install pyobjc'")
+            print("Installez pyobjc avec 'pip install pyobjc'")
             return {}
 
         camera_indices = []
         camera_names = []
         
-        for index, device in enumerate(Quartz.IORegistryIteratorCreateForMatchingService(Quartz.kIOMasterPortDefault, Quartz.CFDictionaryCreate(None, (Quartz.kIOUSBDeviceClassName,), (True,), 1))):
-            camera_name = Quartz.IORegistryEntryGetName(device)
-            if "infrared" in camera_name.lower() or "ir" in camera_name.lower():
-                continue  # Ignore the infrared camera
+        devices = AVCaptureDevice.devicesWithMediaType_('vide')
+        for device_index, device_name in enumerate(devices):
+            camera_name = device_name.localizedName().cString()
             camera_names.append(camera_name)
-            camera_indices.append(index)
-        return camera_names, camera_indices
+            camera_indices.append(device_index)
 
+        return camera_names, camera_indices
+            
     def get_cameras_windows(self):
         # print("entre dans get_cameras_windows()")
         try:
@@ -243,7 +243,17 @@ class VirtualCamera():
                     except Exception as e:
                         print(f"Erreur dans virtual_camera.create_virtual_camera: {e}")
                         pass
-                    self.old_frame = virtual_frame_resized
+            elif sys.platform.startswith("darwin"): 
+                with pyvirtualcam.Camera(width=1280, height=720, fps=30) as cam:
+                    try:
+                        virtual_frame = self.virtual_frame
+                        virtual_frame_resized = self.resize_image(virtual_frame, 1280, 720)
+                        cam.send(virtual_frame_resized)
+                        cam.sleep_until_next_frame()
+                    except Exception as e:
+                        print(f"Erreur dans virtual_camera.create_virtual_camera: {e}")
+                        pass
+            self.old_frame = virtual_frame_resized
     def resize_image(self, image, width, height):
         resized_image = cv2.resize(image, (width, height))
         return resized_image
@@ -535,11 +545,11 @@ class Matrix(QMainWindow):
             except (ImportError, AttributeError, OSError):
                 pass
             
-        self.counter = 0
-        self.timer_counter = QTimer(self)
-        self.image_label = QLabel()
-        self.timer_counter.timeout.connect(self.update_counter) 
-        self.timer_counter.start(1000)
+        # self.counter = 0
+        # self.timer_counter = QTimer(self)
+        # self.image_label = QLabel()
+        # self.timer_counter.timeout.connect(self.update_counter) 
+        # self.timer_counter.start(1000)
         
         self.cap = None
         self.timer_capture = QTimer()
@@ -608,67 +618,67 @@ class Matrix(QMainWindow):
                 print(f"Erreur dans matrix.update_virtual_frame: {e}")
                 message = False
                 
-    def update_counter(self):
-        # print("entre dans matrix.update_counter()\n")
-        self.counter += 1
-        self.counter_string = str(self.counter)
+    # def update_counter(self):
+    #     # print("entre dans matrix.update_counter()\n")
+    #     self.counter += 1
+    #     self.counter_string = str(self.counter)
         
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("0", "¦")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("1","§")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("2", "¨")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("3", "©")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("4", "ª")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("5", "«")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("6", "¬")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("8", "®")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_string = self.counter_string.replace("9", "¯")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("0", "¦")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("1","§")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("2", "¨")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("3", "©")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("4", "ª")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("5", "«")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("6", "¬")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("8", "®")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_string = self.counter_string.replace("9", "¯")
 
             
-        pixmap = QPixmap(1280, 720)  # Créez un QPixmap de la taille souhaitée
-        pixmap.fill(QColor(0,0,0))  # Remplissez-le avec une couleur transparente
+    #     pixmap = QPixmap(1280, 720)  # Créez un QPixmap de la taille souhaitée
+    #     pixmap.fill(QColor(0,0,0))  # Remplissez-le avec une couleur transparente
 
-        painter = QPainter(pixmap)
+    #     painter = QPainter(pixmap)
         
-        font_id = QFontDatabase.addApplicationFont(self.font_path)
-        if font_id < 0: print("Error")
-        families = QFontDatabase.applicationFontFamilies(font_id)
-        painter.setFont(QFont(families[0], 40))
-        painter.setPen(QColor("#008800"))
+    #     font_id = QFontDatabase.addApplicationFont(self.font_path)
+    #     if font_id < 0: print("Error")
+    #     families = QFontDatabase.applicationFontFamilies(font_id)
+    #     painter.setFont(QFont(families[0], 40))
+    #     painter.setPen(QColor("#008800"))
         
-        self.counter_txt = "C O M P T E U R : "
+    #     self.counter_txt = "C O M P T E U R : "
         
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("C", "Ý")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("M", "ç")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("P", "ê")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("T", "î")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("E", "ß")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("U", "ï")
-        if random.randint(0, 9) % 2 == 0:
-            self.counter_txt = self.counter_txt.replace("R", "ì")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("C", "Ý")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("M", "ç")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("P", "ê")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("T", "î")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("E", "ß")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("U", "ï")
+    #     if random.randint(0, 9) % 2 == 0:
+    #         self.counter_txt = self.counter_txt.replace("R", "ì")
 
             
-        # print(self.counter_txt + self.counter_string)
+    #     # print(self.counter_txt + self.counter_string)
             
-        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, self.counter_txt + self.counter_string)
+    #     painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, self.counter_txt + self.counter_string)
         
-        painter.end()
-        # if random.randint(0, 9) % 3 == 0:
-        #     self.image_label.setPixmap(pixmap)
+    #     painter.end()
+    #     if random.randint(0, 9) % 3 == 0:
+    #         self.image_label.setPixmap(pixmap)
             
     
     def setCameraIndex(self, index):
@@ -793,6 +803,8 @@ if __name__ == "__main__":
     app = QApplication([])
     if sys.platform == 'win32': 
         qdarktheme.setup_theme("auto", custom_colors={"primary": "#00B294"})
+    if sys.platform == 'darwin':
+        qdarktheme.setup_theme("auto")
     matrix = Matrix()
     camera_app = CameraApp(matrix)
     matrix.hide()

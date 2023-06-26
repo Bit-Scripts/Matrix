@@ -1,0 +1,9 @@
+numpy
+opencv-python-headless
+Pillow
+pyudev
+thread6
+pyqt6
+pyqtdarktheme
+pyobjc
+pyvirtualcam @ git+https://github.com/letmaik/pyvirtualcam

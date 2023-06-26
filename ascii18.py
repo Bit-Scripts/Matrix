@@ -47,7 +47,8 @@ class CameraApp(QMainWindow):
         self.open_matrix_button = QPushButton("Ouvrir Matrix")
         self.open_matrix_button.clicked.connect(self.camera_chosen)
         
-        self.find_virtual_cameras_on_linux()
+        if sys.platform.startswith("linux"):
+            self.find_virtual_cameras_on_linux()
         
         # Ajoutez le bouton à votre interface utilisateur
         self.layout.addWidget(self.camera_selector)
@@ -216,7 +217,8 @@ class VirtualCamera():
         self.running = running
     
     def run(self, virtual_frame):
-        self.video_device = self.find_virtual_cameras_on_linux()
+        if sys.platform.startswith("linux"):
+            self.video_device = self.find_virtual_cameras_on_linux()
         self.virtual_frame = virtual_frame
         if self.running:
             # print("entre dans virtual_camera.create_virtual_camera()\n")

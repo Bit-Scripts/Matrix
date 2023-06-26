@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon, QImage, QKeyEvent, QPixmap, QColor, QPainter, QFont, QFontDatabase
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton, QFrame
-
+import qdarktheme
 
 class CameraApp(QMainWindow):
     def __init__(self, matrix):
@@ -352,11 +352,6 @@ class VideoTreatment():
     def create_rain_drops(self, ascii_image):
         if self.running:
             try:
-                # if len(self.drop_columns) < self.len_array_width:
-                #     for _ in range(self.len_array_width - len(self.drop_columns)):
-                #         column = random.randint(0, self.len_array_width - 1)
-                #         self.drop_columns.append(column)
-                #         print(f"\nnombre de goutte après ajout {len(self.drop_columns)}")
                 for column in range(110):
                     if self.rain_drops[0][column] == -1:
                         if self.drop_of_water_image_ascii[0][column] == ' ':
@@ -795,6 +790,8 @@ class Matrix(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
+    if sys.platform == 'win32': 
+        qdarktheme.setup_theme("auto", custom_colors={"primary": "#00B294"})
     matrix = Matrix()
     camera_app = CameraApp(matrix)
     matrix.hide()

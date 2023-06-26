@@ -6,3 +6,4 @@ pygrabber
 thread6
 pyqt6
 ctypes
+pyqtdarktheme

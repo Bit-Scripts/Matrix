@@ -5,3 +5,4 @@ pyudev
 v4l2py
 thread6
 pyqt6
+pyqtdarktheme

@@ -280,69 +280,48 @@ class VirtualCamera():
         self.running = running
 
 class VideoTreatment():
-    def __init__(self, frame, rain_00ff00_image, rain_00ee00_image, rain_00dd00_image, rain_00cc00_image, rain_00bb00_image, rain_00aa00_image, rain_009900_image, rain_008800_image, rain_007700_image, drop_of_water_image_ascii, matrix_instance):
+    def __init__(self, frame, rain_00ff00_image, rain_00bb00_image, rain_008800_image, rain_006600_image, drop_of_water_image_ascii, matrix_instance):
         self.matrix_instance = matrix_instance
-        self.len_array_width = 220
-        self.len_array_height = 68
+        self.len_array_width = 147
+        self.len_array_height = 45
         super().__init__()
         self.frame = frame
-        self.rain_drops = [[-1] * 220 for _ in range(2)]
+        self.rain_drops = [[-1] * self.len_array_width for _ in range(2)]
         self.rain_00ff00_image = rain_00ff00_image
-        self.rain_00ee00_image = rain_00ee00_image
-        self.rain_00dd00_image = rain_00dd00_image
-        self.rain_00cc00_image = rain_00cc00_image
         self.rain_00bb00_image = rain_00bb00_image
-        self.rain_00aa00_image = rain_00aa00_image
-        self.rain_009900_image = rain_009900_image
         self.rain_008800_image = rain_008800_image
-        self.rain_007700_image = rain_007700_image
+        self.rain_006600_image = rain_006600_image
         self.drop_of_water_image_ascii = drop_of_water_image_ascii
         global running
         running = True
         self.running = running
         self.virtual_frame = np.zeros((480, 848, 3), dtype=np.uint8)
-
+        self.characters = ' úù_.-,`;:ö+/\'=Åa~^³xwvu%sc*><onø÷"ÖÈÊe|ÄrÃ±iÉz\m)(¹l¡»·ãI}{][ýÙÐ§1jÔÍ¾ÂætL!ÌÁÀº¸´Ëy?Òþ¶qg¨p2ÑÏ¼²TfCJäÝ7Óü×©3YØÎ°Õ½«5Zóõ¿Ç£ôíSÆµ6¬¢kdûbîàªF4òXhÚ¯9êP$#GáßEÛA¤VðïU&éOÞåKD®8âHÜìRBëQW¦0@ñMèNç¥'
+        self.ascii_cache = {}
+        
     def update_camera_frame(self, camera_frame):
         self.update_ascii_image(camera_frame)        
 
-
-    # Fonction pour convertir une intensité en caractère ASCII
-    def get_character(self, intensity):
-        if self.running:
-            characters = ' ú.ù,:öøýü×ÖÅ³·ÈØÙÍÐ±´¶¹º¼Â²ÇËÒÓ¾Ú'
-            num_levels = len(characters)
-            level = intensity * (num_levels - 1) // 255
-            # level = intensity * (num_levels - 1) // 765
-            return characters[level] 
-
-        
-    # Fonction pour convertir une image en ASCII artq
+    # Fonction pour convertir une image en ASCII art
     def image_to_ascii(self, image):
         if self.running:
             try:
-                ascii_image = []
-                if len(image.shape) > 2 and image.shape[2] == 3:
-                    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                else:
-                    gray_image = image
-                resized_image = cv2.resize(gray_image, (self.len_array_width, self.len_array_height))
-                for i in range(resized_image.shape[0]):
-                    row = []
-                    for j in range(resized_image.shape[1]):
-                        intensity = resized_image[i][j]
-                        row.append(self.get_character(intensity))
-                    ascii_image.append(row)
-                return ascii_image
+                image = cv2.resize(image, (self.len_array_width, self.len_array_height))
+                rgb_sum = np.sum(image, axis=2)
+                indices = np.clip(np.floor_divide(rgb_sum, 765 / len(self.characters)), 0, len(self.characters) - 1).astype(int)
+                ascii_art = []
+                for row in indices:
+                    ascii_row = []
+                    for index in row:
+                        if index in self.ascii_cache:
+                            char = self.ascii_cache[index]
+                        else:
+                            char = self.characters[index]
+                            self.ascii_cache[index] = char
+                        ascii_row.append(char)
+                    ascii_art.append(ascii_row)
+                return ascii_art
                 
-                # resized_image = cv2.resize(image, (self.len_array_width, self.len_array_height))
-                # canal_bleu, canal_vert, canal_rouge = cv2.split(resized_image)
-                # for i in range(resized_image.shape[0]):
-                #     row = []
-                #     for j in range(resized_image.shape[1]):
-                #         intensity = canal_bleu[i, j] + canal_vert[i, j] + canal_rouge[i, j]
-                #         row.append(self.get_character(intensity))
-                #     ascii_image.append(row)
-                # return ascii_image
             except Exception as e:
                 print(f"Erreur dans video_treatment.image_to_ascii: {e}")
 
@@ -355,6 +334,7 @@ class VideoTreatment():
                 y_image = self.image_to_ascii(f)
                 ascii_image = y_image   
                 self.create_rain_drops(ascii_image)
+                
             except Exception as e:
                 print(f"Erreur dans video_treatment.update_ascii_image: {e}")
 
@@ -362,15 +342,15 @@ class VideoTreatment():
     def create_rain_drops(self, ascii_image):
         if self.running:
             try:
-                for column in range(220):
+                for column in range(self.len_array_width):
                     if self.rain_drops[0][column] == -1:
                         if self.drop_of_water_image_ascii[0][column] == ' ':
                             self.rain_drops[0][column] = 0
                     else:
-                        if self.rain_drops[0][column] == self.len_array_height - 1:
+                        if self.rain_drops[0][column] == self.len_array_height - 15:
                             self.rain_drops[1][column] = 0
 
-                        if self.rain_drops[1][column] == self.len_array_height - 1:
+                        if self.rain_drops[1][column] == self.len_array_height - 15:
                             self.rain_drops[0][column] = 0
                             
                     column_type = column % 3
@@ -390,134 +370,68 @@ class VideoTreatment():
 
                         if row < self.len_array_height:
                             self.drop_of_water_image_ascii[row][column] = ascii_image[row][column]
+                            ascii_image[row][column] = ' '
                         if row - 1 >= 0 and row - 1 < self.len_array_height:
                             self.drop_of_water_image_ascii[row - 1][column] = ' '
                             self.rain_00ff00_image[row - 1][column] = ascii_image[row - 1][column]
-                        if row - 2 >= 0 and row - 2 < self.len_array_height:
-                            self.rain_00ff00_image[row - 2][column] = ascii_image[row - 2][column]
-                        if row - 3 >= 0 and row - 3 < self.len_array_height:
-                            self.rain_00ff00_image[row - 3][column] = ' '
-                            self.rain_00ee00_image[row - 3][column] = ascii_image[row - 3][column]
+                            ascii_image[row - 1][column] = ' '
                         if row - 4 >= 0 and row - 4 < self.len_array_height:
-                            self.rain_00ee00_image[row - 4][column] = ascii_image[row - 4][column]
-                        if row - 5 >= 0 and row - 5 < self.len_array_height:                            
-                            self.rain_00ee00_image[row - 5][column] = ' '
-                            self.rain_00dd00_image[row - 5][column] = ascii_image[row - 5][column]
-                        if row - 6 >= 0 and row - 6 < self.len_array_height:
-                            self.rain_00dd00_image[row - 6][column] = ascii_image[row - 6][column]
-                        if row - 7 >= 0 and row - 7 < self.len_array_height:
-                            self.rain_00dd00_image[row - 7][column] = ' '
-                            self.rain_00cc00_image[row - 7][column] = ascii_image[row - 7][column]
-                        if row - 8 >= 0 and row - 8 < self.len_array_height:
-                            self.rain_00cc00_image[row - 8][column] = ' '
-                            self.rain_00bb00_image[row - 8][column] = ascii_image[row - 8][column]
-                        if row - 9 >= 0 and row - 9 < self.len_array_height:
-                            self.rain_00bb00_image[row - 9][column] = ' '
-                            self.rain_00aa00_image[row - 9][column] = ascii_image[row - 9][column]
+                            self.rain_00ff00_image[row - 4][column] = ' '
+                            self.rain_00bb00_image[row - 4][column] = ascii_image[row - 4][column]
+                            ascii_image[row - 4][column] = ' '
+                        if row - 7 >= 0 and row - 7 < self.len_array_height:                            
+                            self.rain_00bb00_image[row - 7][column] = ' '
+                            self.rain_008800_image[row - 7][column] = ascii_image[row - 7][column]
+                            ascii_image[row - 7][column] = ' '
                         if row - 10 >= 0 and row - 10 < self.len_array_height:
-                            self.rain_00aa00_image[row - 10][column] = ' '
-                            self.rain_009900_image[row - 10][column] = ascii_image[row - 10][column]
-                        if row - 11 >= 0 and row - 11 < self.len_array_height:
-                            self.rain_009900_image[row - 11][column] = ascii_image[row - 11][column]
-                        if row - 12 >= 0 and row - 12 < self.len_array_height:
-                            self.rain_009900_image[row - 12][column] = ' '
-                            self.rain_008800_image[row - 12][column] = ascii_image[row - 12][column]
+                            self.rain_008800_image[row - 10][column] = ' '
+                            self.rain_006600_image[row - 10][column] = ascii_image[row - 10][column]
+                            ascii_image[row - 10][column] = ' '
                         if row - 13 >= 0 and row - 13 < self.len_array_height:
-                            self.rain_008800_image[row - 13][column] = ascii_image[row - 13][column]
-                        if row - 14 >= 0 and row - 14 < self.len_array_height:
-                            self.rain_008800_image[row - 14][column] = ' '
-                            self.rain_007700_image[row - 14][column] = ascii_image[row - 14][column]
-                        if row - 15 >= 0 and row - 15 < self.len_array_height:    
-                            self.rain_007700_image[row - 15][column] = ' '
-                        if self.rain_00bb00_image[self.len_array_height - 1][column] != ' ':
-                            self.rain_00bb00_image[self.len_array_height - 1][column] = ' '
-                            self.rain_00bb00_image[self.len_array_height - 2][column] = ' '
-                            self.rain_00aa00_image[self.len_array_height - 3][column] = ' '
-                            self.rain_00aa00_image[self.len_array_height - 4][column] = ' '
-                            self.rain_009900_image[self.len_array_height - 5][column] = ' '
-                            self.rain_009900_image[self.len_array_height - 6][column] = ' '
-                            self.rain_008800_image[self.len_array_height - 7][column] = ' '
-                            self.rain_008800_image[self.len_array_height - 8][column] = ' '
-                            self.rain_007700_image[self.len_array_height - 9][column] = ' '
-                            self.rain_007700_image[self.len_array_height - 10][column] = ' '
-
-                ascii_image_result = ""
-                drop_of_water_image_ascii_result = ""
-                rain_00ff00_image_result = ""
-                rain_00ee00_image_result = ""
-                rain_00dd00_image_result = ""
-                rain_00cc00_image_result = ""
-                rain_00bb00_image_result = ""
-                rain_00aa00_image_result = ""
-                rain_009900_image_result = ""
-                rain_008800_image_result = ""
-                rain_007700_image_result = ""
-
-                for row in range(self.len_array_height):
-                    ascii_image_row = ""
-                    drop_of_water_image_ascii_row = ""
-                    rain_00ff00_image_row = ""
-                    rain_00ee00_image_row = ""
-                    rain_00dd00_image_row = ""
-                    rain_00cc00_image_row = ""
-                    rain_00bb00_image_row = ""
-                    rain_00aa00_image_row = ""
-                    rain_009900_image_row = ""
-                    rain_008800_image_row = ""
-                    rain_007700_image_row = ""
-                    for col in range(self.len_array_width):
-                        if row < self.len_array_height and col < self.len_array_width:
-                            ascii_image_row += ascii_image[row][col]
-                            drop_of_water_image_ascii_row += self.drop_of_water_image_ascii[row][col]
-                            rain_00ff00_image_row += self.rain_00ff00_image[row][col]
-                            rain_00ee00_image_row += self.rain_00ee00_image[row][col]
-                            rain_00dd00_image_row += self.rain_00dd00_image[row][col]
-                            rain_00cc00_image_row += self.rain_00cc00_image[row][col]
-                            rain_00bb00_image_row += self.rain_00bb00_image[row][col]
-                            rain_00aa00_image_row += self.rain_00aa00_image[row][col]
-                            rain_009900_image_row += self.rain_009900_image[row][col]
-                            rain_008800_image_row += self.rain_008800_image[row][col]
-                            rain_007700_image_row += self.rain_007700_image[row][col]
-
-                    ascii_image_result += ascii_image_row + '\n'
-                    drop_of_water_image_ascii_result += drop_of_water_image_ascii_row + '\n'
-                    rain_00ff00_image_result += rain_00ff00_image_row + '\n'
-                    rain_00ee00_image_result += rain_00ee00_image_row + '\n'
-                    rain_00dd00_image_result += rain_00dd00_image_row + '\n'
-                    rain_00cc00_image_result += rain_00cc00_image_row + '\n'
-                    rain_00bb00_image_result += rain_00bb00_image_row + '\n'
-                    rain_00aa00_image_result += rain_00aa00_image_row + '\n'
-                    rain_009900_image_result += rain_009900_image_row + '\n'
-                    rain_008800_image_result += rain_008800_image_row + '\n'
-                    rain_007700_image_result += rain_007700_image_row + '\n'
+                            self.rain_006600_image[row - 13][column] = ascii_image[row - 13][column]
+                            ascii_image[row - 13][column] = ' '
+                        if row - 16 >= 0 and row - 16 < self.len_array_height:
+                            self.rain_006600_image[row - 16][column] = ' '
+                        if self.drop_of_water_image_ascii[self.len_array_height - 1][column] != ' ':
+                            self.drop_of_water_image_ascii[self.len_array_height - 1][column] = ' '
+                            self.rain_00ff00_image[self.len_array_height - 2][column] = ' '
+                            self.rain_00ff00_image[self.len_array_height - 3][column] = ' '
+                            self.rain_00bb00_image[self.len_array_height - 4][column] = ' '
+                            self.rain_008800_image[self.len_array_height - 5][column] = ' '
+                            self.rain_008800_image[self.len_array_height - 6][column] = ' '
+                            self.rain_006600_image[self.len_array_height - 7][column] = ' '
+                            self.rain_006600_image[self.len_array_height - 8][column] = ' '
 
 
-                self.send_to_virtual_camera(ascii_image_result, rain_00ff00_image_result, rain_00ee00_image_result, rain_00dd00_image_result, rain_00cc00_image_result, rain_00bb00_image_result, rain_00aa00_image_result, rain_009900_image_result, rain_008800_image_result, rain_007700_image_result, drop_of_water_image_ascii_result)
+                    ascii_image_result = '\n'.join([''.join(row) for row in ascii_image])
+                    rain_006600_image_result = '\n'.join([''.join(row) for row in self.rain_006600_image])
+                    rain_008800_image_result = '\n'.join([''.join(row) for row in self.rain_008800_image])
+                    rain_00bb00_image_result = '\n'.join([''.join(row) for row in self.rain_00bb00_image])
+                    rain_00ff00_image_result = '\n'.join([''.join(row) for row in self.rain_00ff00_image])
+                    drop_of_water_image_ascii_result = '\n'.join([''.join(row) for row in self.drop_of_water_image_ascii])
+
+                self.send_to_virtual_camera(ascii_image_result, rain_00ff00_image_result, rain_00bb00_image_result, rain_008800_image_result, rain_006600_image_result, drop_of_water_image_ascii_result)
                 #print(f"complete : \n{ascii_image_result},\n la pluie : \n{rain_ascii_image_result},\n la goutte d'eau : \n{drop_of_water_image_ascii_result}")
                 
             except Exception as e:
                 print(f"Erreur dans video_treatment.create_rain_drops: {e}")
 
-    def send_to_virtual_camera(self, ascii_image_result, rain_00ff00_image_result, rain_00ee00_image_result, rain_00dd00_image_result, rain_00cc00_image_result, rain_00bb00_image_result, rain_00aa00_image_result, rain_009900_image_result, rain_008800_image_result, rain_007700_image_result, drop_of_water_image_ascii_result):
+    def send_to_virtual_camera(self, ascii_image_result, rain_00ff00_image_result, rain_00bb00_image_result, rain_008800_image_result, rain_006600_image_result, drop_of_water_image_ascii_result):
         if self.running:
             width, height = 848, 480
-            ascii_font_size_width = 8
+            ascii_font_size_width = 12
             wd = sys._MEIPASS if getattr(sys, 'frozen', False) else ''
             font_path = os.path.join(wd, '.', 'mtx.ttf')
             font = ImageFont.truetype(font_path, ascii_font_size_width)
-            colors = ['#006600', '#007700', '#008800', '#009900', '#00aa00', '#00bb00', '#00cc00', '#00dd00', '#00ee00', '#00ff00', 'white']
-            images = [ascii_image_result, rain_007700_image_result, rain_008800_image_result, rain_009900_image_result,
-                    rain_00aa00_image_result, rain_00bb00_image_result, rain_00cc00_image_result, rain_00dd00_image_result,
-                    rain_00ee00_image_result, rain_00ff00_image_result, drop_of_water_image_ascii_result]
+            colors = ['#004400', '#006600', '#008800', '#00bb00', '#00ff00', 'white']
+            images = [ascii_image_result, rain_006600_image_result, rain_008800_image_result,
+                    rain_00bb00_image_result, rain_00ff00_image_result, drop_of_water_image_ascii_result]
             try:
-                canvas_image = Image.new('RGB', (width, height), 'black')
+                canvas_image = Image.new('RGB', (width, height), '#001100')
                 draw = ImageDraw.Draw(canvas_image)
                 for color, image in zip(colors, images):
                     draw.text((0, 0), image, fill=color, font=font)
-                blurred_image = canvas_image.filter(ImageFilter.GaussianBlur(radius=5))
-                draw_on_blur = ImageDraw.Draw(blurred_image)
-                for color, image in zip(colors, images):
-                    draw_on_blur.text((0, 0), image, fill=color, font=font)
+                blurred_image = canvas_image.filter(ImageFilter.GaussianBlur(radius=.5))
                 self.virtual_frame = cv2.cvtColor(np.array(blurred_image), cv2.COLOR_RGB2BGR)
                 self.matrix_instance.update_virtual_frame(self.virtual_frame)
             
@@ -559,23 +473,17 @@ class Matrix(QMainWindow):
             except (ImportError, AttributeError, OSError):
                 pass
             
-        # self.counter = 0
-        # self.timer_counter = QTimer(self)
-        # self.image_label = QLabel()
-        # self.timer_counter.timeout.connect(self.update_counter) 
-        # self.timer_counter.start(1000)
-        
         self.cap = None
         self.timer_capture = QTimer()
         self.timer_capture.timeout.connect(self.capture_frame)
-        self.timer_capture.start(100) 
+        self.timer_capture.start(33) 
 
         self.rain_intensity = 0.5
         self.image_updated = ""
 
         width, height = 848, 480
 
-        self.ascii_font_size_width = 8
+        self.ascii_font_size_width = 12
         self.ascii_font_size_height = self.ascii_font_size_width * 9 / 16
         
         self.font_path = os.path.join(self.wd, 'mtx.ttf')
@@ -586,21 +494,15 @@ class Matrix(QMainWindow):
         self.virtual_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         
         frame = None
-        self.len_array_width = 220
-        self.len_array_height = 68
+        self.len_array_width = 147
+        self.len_array_height = 45
         drop_of_water_image_ascii = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         rain_00ff00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_00ee00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_00dd00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_00cc00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         rain_00bb00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_00aa00_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_009900_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         rain_008800_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
-        rain_007700_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
+        rain_006600_image = [[' ' for _ in range(self.len_array_width)] for _ in range(self.len_array_height)]
         
-        
-        self.video_treatment = VideoTreatment(frame, rain_00ff00_image, rain_00ee00_image, rain_00dd00_image, rain_00cc00_image, rain_00bb00_image, rain_00aa00_image, rain_009900_image, rain_008800_image, rain_007700_image, drop_of_water_image_ascii, self)
+        self.video_treatment = VideoTreatment(frame, rain_00ff00_image, rain_00bb00_image, rain_008800_image, rain_006600_image, drop_of_water_image_ascii, self)
         self.vitual_camera = VirtualCamera()
 
     def stop_virtual_camera(self):
@@ -631,69 +533,6 @@ class Matrix(QMainWindow):
             if message:
                 print(f"Erreur dans matrix.update_virtual_frame: {e}")
                 message = False
-                
-    # def update_counter(self):
-    #     # print("entre dans matrix.update_counter()\n")
-    #     self.counter += 1
-    #     self.counter_string = str(self.counter)
-        
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("0", "¦")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("1","§")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("2", "¨")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("3", "©")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("4", "ª")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("5", "«")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("6", "¬")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("8", "®")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_string = self.counter_string.replace("9", "¯")
-
-            
-    #     pixmap = QPixmap(1280, 720)  # Créez un QPixmap de la taille souhaitée
-    #     pixmap.fill(QColor(0,0,0))  # Remplissez-le avec une couleur transparente
-
-    #     painter = QPainter(pixmap)
-        
-    #     font_id = QFontDatabase.addApplicationFont(self.font_path)
-    #     if font_id < 0: print("Error")
-    #     families = QFontDatabase.applicationFontFamilies(font_id)
-    #     painter.setFont(QFont(families[0], 40))
-    #     painter.setPen(QColor("#008800"))
-        
-    #     self.counter_txt = "C O M P T E U R : "
-        
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("C", "Ý")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("M", "ç")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("P", "ê")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("T", "î")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("E", "ß")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("U", "ï")
-    #     if random.randint(0, 9) % 2 == 0:
-    #         self.counter_txt = self.counter_txt.replace("R", "ì")
-
-            
-    #     # print(self.counter_txt + self.counter_string)
-            
-    #     painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, self.counter_txt + self.counter_string)
-        
-    #     painter.end()
-    #     if random.randint(0, 9) % 3 == 0:
-    #         self.image_label.setPixmap(pixmap)
-            
     
     def setCameraIndex(self, index):
         # print("entre dans matrix.setCameraIndex()\n")

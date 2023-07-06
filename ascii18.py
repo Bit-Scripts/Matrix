@@ -1,6 +1,7 @@
 import os
 os.environ["OPENCV_LOG_LEVEL"]="SILENT"
 import cv2
+import subprocess
 import platform
 import random
 import sys
@@ -10,7 +11,7 @@ import pyvirtualcam
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon, QImage, QKeyEvent, QPixmap, QColor, QPainter, QFont, QFontDatabase
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton, QFrame
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QComboBox, QPushButton, QFrame, QMessageBox
 if sys.platform == 'win32' or sys.platform == 'darwin': 
     import qdarktheme
 
@@ -161,7 +162,6 @@ class CameraApp(QMainWindow):
                     devices.append(index)
                     cap.release()
                 else:
-                    # print(f"Avertissement: Impossible d'ouvrir la caméra {index}")
                     pass
                 time.sleep(0.1)
                 index += 1
@@ -172,7 +172,6 @@ class CameraApp(QMainWindow):
                 break
             
         for index in devices:
-            # print(f"Récupération des informations de la caméra {index}")
             try:
                 with Device.from_id(index) as cam:
                     cam.open()
@@ -192,7 +191,6 @@ class CameraApp(QMainWindow):
         except ImportError:
             self.label.setText("Installez v4l2py avec 'pip install v4l2py'")
             return {}
-        
         context = pyudev.Context()
         devices = context.list_devices(subsystem='video4linux')
         camera_find = False
@@ -204,6 +202,27 @@ class CameraApp(QMainWindow):
         if not camera_find:
             self.label.setText("Veuillez activer la camera virtuelle pour continuer")
             self.open_matrix_button.setEnabled(False)
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Demande des droits root")
+            msg_box.setText("L'activation de la camera virtuelle nécessite les droits root.")
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            if msg_box.exec() == QMessageBox.StandardButton.Ok:
+                subprocess.run(["pkexec", "modprobe", "v4l2loopback"])
+                context = pyudev.Context()
+                devices = context.list_devices(subsystem='video4linux')
+                camera_find = False
+                for device in devices:
+                    product_id = device.get('ID_V4L_PRODUCT')
+                    if product_id == 'Dummy video device (0x0000)':
+                        self.label.setText("Camera virtuelle activée")
+                        self.open_matrix_button.setEnabled(True)
+                        camera_find = True
+                pass
+            else:
+                self.label.setText("Veuillez activer la camera virtuelle pour continuer\nsudo mobprobe v4l2loopback")
+                self.open_matrix_button.setEnabled(False)
+                pass
 
     def closeEvent(self, event):
         # print("entre dans closeEvent()")

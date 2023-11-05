@@ -660,6 +660,7 @@ class Matrix(QMainWindow):
                     ret, frame = capture.read()
                     if ret:
                         f = frame
+                        f = cv2.resize(f, (width, height))
                         combined_frame = cv2.addWeighted(f, .5, canvas_resized, 1, 0)
                         
                         frame = combined_frame

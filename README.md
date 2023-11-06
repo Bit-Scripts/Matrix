@@ -67,6 +67,25 @@ $  pip  install  -r  requirements.txt
     ```bash
     $ sudo modprobe v4l2loopback
     ```
+    4. Nouvelle méthode d'installation
+    Pour Ubuntu 23.04
+    ```bash    
+    $ sudo apt update
+    $ sudo apt install -y git python3-pip v4l2loopback-utils libqt6widgets6 libqt6core6 libqt6multimedia6 gstreamer1.0-opencv libopencv-apps2d libopencv-core406 libopencv-imgcodecs406 libopencv-imgproc406 $ libopencv-objdetect406 libopencv-photo406 libopencv-shape406 libopencv-video406 libopencv-videoio406 opencv-data ffmpeg gstreamer1.0-libav v4l2loopback-utils v4l2loopback-dkms
+    $ sudo mv /usr/lib/python3.11/EXTERNALLY-MANAGED /usr/lib/python3.11/EXTERNALLY-MANAGED.old
+    $ sudo modprobe v4l2loopback
+    $ git clone https://github.com/Bit-Scripts/Matrix.git
+    $ pip install -r requirements-linux.txt
+    $ pip install --upgrade pyqt6_tools
+    ```
+    Pour Linux Mint 21
+    ```bash
+    $ sudo apt install -y git python3-pip v4l2loopback-utils libqt6widgets6 libqt6core6 libqt6multimedia6 gstreamer1.0-opencv libopencv-apps2d opencv-data ffmpeg gstreamer1.0-libav v4l2loopback-utils v4l2loopback-dkms
+    $ git clone https://github.com/Bit-Scripts/Matrix.git
+    $ pip install -r requirements-linux.txt
+    $ pip install --upgrade pyqt6_tools
+    $ sudo modprobe v4l2loopback
+    ```
 
 ## Utilisation ##
 

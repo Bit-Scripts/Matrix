@@ -317,6 +317,7 @@ class VideoTreatment():
         self.virtual_frame = np.zeros((480, 848, 3), dtype=np.uint8)
         self.characters = ' úù_.-,`;:ö+/\'=Åa~^³xwvu%sc*><onø÷"ÖÈÊe|ÄrÃ±iÉz\m)(¹l¡»·ãI}{][ýÙÐ§1jÔÍ¾ÂætL!ÌÁÀº¸´Ëy?Òþ¶qg¨p2ÑÏ¼²TfCJäÝ7Óü×©3YØÎ°Õ½«5Zóõ¿Ç£ôíSÆµ6¬¢kdûbîàªF4òXhÚ¯9êP$#GáßEÛA¤VðïU&éOÞåKD®8âHÜìRBëQW¦0@ñMèNç¥'
         self.ascii_cache = {}
+        self.frame_counter = 0
         
     def update_camera_frame(self, camera_frame):
         self.update_ascii_image(camera_frame)        
@@ -361,7 +362,14 @@ class VideoTreatment():
     def create_rain_drops(self, ascii_image):
         if self.running:
             try:
-                for column in range(self.len_array_width):
+                self.original_list = list(range(self.len_array_width))
+                if self.frame_counter > 3:
+                    self.frame_counter = 0
+                self.choosen_column = self.original_list[self.frame_counter::4]
+                self.frame_counter += 1
+                ascii_image_result = [[(char, '#004400') for char in row] for row in ascii_image]
+                
+                for column in self.choosen_column:
                     if self.rain_drops[0][column] == -1:
                         if self.drop_of_water_image_ascii[0][column] == ' ':
                             self.rain_drops[0][column] = 0
@@ -450,8 +458,8 @@ class VideoTreatment():
                 draw = ImageDraw.Draw(canvas_image)
                 for color, image in zip(colors, images):
                     draw.text((0, 0), image, fill=color, font=font)
-                blurred_image = canvas_image.filter(ImageFilter.GaussianBlur(radius=.5))
-                self.virtual_frame = cv2.cvtColor(np.array(blurred_image), cv2.COLOR_RGB2BGR)
+                # blurred_image = canvas_image.filter(ImageFilter.GaussianBlur(radius=.5))
+                self.virtual_frame = cv2.cvtColor(np.array(canvas_image), cv2.COLOR_RGB2BGR)
                 self.matrix_instance.update_virtual_frame(self.virtual_frame)
             
             except Exception as e:

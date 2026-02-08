@@ -12,7 +12,7 @@ added_files = [
 ]
 
 a = Analysis(
-    ['ascii18.py'],
+    ['ascii19.py'],
     pathex=[],
     binaries=[('/home/paul/Matrix/mtx.ttf', '.')],
     datas=added_files,

@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['ascii12.py'],
+    ['ascii19.py'],
     pathex=[],
     binaries=[('I:\\ascii\\matrix.ico', '.')],
     datas=[('I:\\ascii\\matrix.ico', '.')],

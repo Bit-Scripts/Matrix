@@ -20,7 +20,7 @@ name=f'Matrix_{target_arch}.app'
 
 a = Analysis(
     [
-        'ascii12.py', 
+        'ascii19.py', 
     ],
     pathex=pathex,
     binaries=[],
